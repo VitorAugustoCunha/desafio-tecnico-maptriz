@@ -1,0 +1,118 @@
+spring:
+  application:
+    name: webgis-backend
+
+  datasource:
+    # Sem credencial no arquivo. Em desenvolvimento sem Docker, exporte as
+    # variaveis (ver .env.example); no compose elas vem do proprio compose.
+    url: ${WEBGIS_DB_URL:jdbc:postgresql://localhost:5432/webgis}
+    username: ${WEBGIS_DB_USER:webgis}
+    password: ${WEBGIS_DB_PASSWORD:webgis}
+    hikari:
+      maximum-pool-size: ${WEBGIS_DB_POOL_MAX:10}
+      # O pool precisa comportar as requisicoes web MAIS as threads do pool GIS,
+      # que abrem transacao propria. Ver webgis.gis-worker abaixo.
+      pool-name: webgis-pool
+
+  jpa:
+    # O schema e do Flyway. `validate` faz a aplicacao recusar a subir se o
+    # mapeamento divergir do banco, em vez de alterar tabela em producao como
+    # fazia o `update` do codigo original.
+    hibernate:
+      ddl-auto: validate
+    # Sessao aberta na renderizacao esconde N+1 e prende conexao do pool.
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  # Desligado: o seed vive nas migrations. Era isto, com `mode=always`, que
+  # duplicava os 12 imoveis a cada subida.
+  sql:
+    init:
+      mode: never
+
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${WEBGIS_PORT:8080}
+  error:
+    # Detalhe de erro sai por ProblemDetail, com o que o cliente precisa e nada
+    # do que ele nao deveria ver.
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+
+logging:
+  level:
+    br.com.webgis: ${WEBGIS_LOG_LEVEL:INFO}
+  pattern:
+    # requestId entra pelo MDC e acompanha a tarefa ate dentro do pool GIS.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} [%X{requestId:-}] - %msg%n"
+
+webgis:
+  cors:
+    # Vazio em producao: o Nginx serve o frontend e faz proxy de /api, entao
+    # tudo fica na mesma origem e CORS deixa de ser necessario.
+    origens-permitidas: ${WEBGIS_CORS_ORIGINS:}
+
+  paginacao:
+    tamanho-padrao: ${WEBGIS_PAGINA_TAMANHO_PADRAO:20}
+    tamanho-maximo: ${WEBGIS_PAGINA_TAMANHO_MAXIMO:100}
+
+  mapa:
+    # Teto de feicoes por consulta de viewport. Acima disso o servidor agrega em
+    # vez de devolver feicao por feicao.
+    limite-feicoes: ${WEBGIS_MAPA_LIMITE_FEICOES:2000}
+    # Abaixo deste zoom o mapa recebe agregados (clusters) calculados no PostGIS.
+    zoom-minimo-detalhe: ${WEBGIS_MAPA_ZOOM_DETALHE:12}
+
+  gis-worker:
+    # Pool dedicado a tarefas GIS pesadas, separado das threads de requisicao.
+    # Fila pequena de proposito: a intencao e recusar rapido (503) em vez de
+    # acumular trabalho ate estourar a memoria.
+    tamanho-nucleo: ${WEBGIS_GIS_POOL_NUCLEO:2}
+    tamanho-maximo: ${WEBGIS_GIS_POOL_MAXIMO:4}
+    capacidade-fila: ${WEBGIS_GIS_POOL_FILA:8}
+    segundos-para-nova-tentativa: ${WEBGIS_GIS_RETRY_AFTER:30}
+    timeout-tarefa-segundos: ${WEBGIS_GIS_TIMEOUT:120}
+    tamanho-lote: ${WEBGIS_GIS_LOTE:500}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    br.com.webgis: DEBUG
+
+webgis:
+  cors:
+    # Dev-server do Angular em outra porta: aqui CORS e necessario.
+    origens-permitidas: http://localhost:4200

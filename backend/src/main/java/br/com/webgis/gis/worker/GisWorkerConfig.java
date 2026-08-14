@@ -13,7 +13,7 @@ import org.springframework.core.task.TaskDecorator;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.MeterBinder;
 
 /**
  * Pool dedicado a tarefas GIS pesadas.
@@ -38,7 +38,7 @@ public class GisWorkerConfig {
 	public static final String EXECUTOR_GIS = "gisWorkerExecutor";
 
 	@Bean(name = EXECUTOR_GIS)
-	public ThreadPoolTaskExecutor gisWorkerExecutor(GisWorkerProperties propriedades, MeterRegistry metricas) {
+	public ThreadPoolTaskExecutor gisWorkerExecutor(GisWorkerProperties propriedades) {
 		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 
 		executor.setCorePoolSize(propriedades.tamanhoNucleo());
@@ -59,28 +59,41 @@ public class GisWorkerConfig {
 		executor.setTaskDecorator(new PropagadorDeContexto());
 		executor.initialize();
 
-		registrarMetricas(executor, metricas);
-
 		log.info("Pool GIS iniciado: nucleo={}, maximo={}, fila={}",
 				propriedades.tamanhoNucleo(), propriedades.tamanhoMaximo(), propriedades.capacidadeFila());
 
 		return executor;
 	}
 
-	private static void registrarMetricas(ThreadPoolTaskExecutor executor, MeterRegistry metricas) {
-		ThreadPoolExecutor pool = executor.getThreadPoolExecutor();
+	/**
+	 * Metricas do pool: ocupacao, fila e total concluido.
+	 *
+	 * <p>Exposto como {@link MeterBinder}, e nao registrado dentro do {@code @Bean}
+	 * do executor: injetar o {@code MeterRegistry} durante a criacao do executor
+	 * antecipa a montagem de toda a infraestrutura de metricas (que por sua vez
+	 * enxerga a {@code EntityManagerFactory}) para antes do Flyway rodar, e o
+	 * contexto quebra com dependencia circular. Com {@code MeterBinder}, o Spring
+	 * faz a ligacao quando o registry ja existe.
+	 */
+	@Bean
+	public MeterBinder metricasDoPoolGis(
+			@org.springframework.beans.factory.annotation.Qualifier(EXECUTOR_GIS) ThreadPoolTaskExecutor executor) {
 
-		Gauge.builder("webgis.gis.pool.ativas", pool, ThreadPoolExecutor::getActiveCount)
-				.description("Tarefas GIS em execucao")
-				.register(metricas);
+		return registry -> {
+			ThreadPoolExecutor pool = executor.getThreadPoolExecutor();
 
-		Gauge.builder("webgis.gis.pool.fila", pool, p -> p.getQueue().size())
-				.description("Tarefas GIS aguardando na fila")
-				.register(metricas);
+			Gauge.builder("webgis.gis.pool.ativas", pool, ThreadPoolExecutor::getActiveCount)
+					.description("Tarefas GIS em execucao")
+					.register(registry);
 
-		Gauge.builder("webgis.gis.pool.concluidas", pool, ThreadPoolExecutor::getCompletedTaskCount)
-				.description("Tarefas GIS concluidas desde a subida")
-				.register(metricas);
+			Gauge.builder("webgis.gis.pool.fila", pool, p -> p.getQueue().size())
+					.description("Tarefas GIS aguardando na fila")
+					.register(registry);
+
+			Gauge.builder("webgis.gis.pool.concluidas", pool, ThreadPoolExecutor::getCompletedTaskCount)
+					.description("Tarefas GIS concluidas desde a subida")
+					.register(registry);
+		};
 	}
 
 	/**

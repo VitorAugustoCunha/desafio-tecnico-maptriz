@@ -2,13 +2,11 @@ package br.com.webgis;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-
-import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
 
 /**
  * Base dos testes de integracao.
@@ -21,6 +19,11 @@ import jakarta.transaction.Transactional;
  * <p>Container unico para toda a suite (padrao singleton, iniciado no bloco
  * estatico e reaproveitado): subir um container por classe de teste dominaria o
  * tempo de execucao.
+ *
+ * <p>As consultas de apoio usam {@link JdbcTemplate}, e nao o
+ * {@code EntityManager}: os metodos de teste nao passam por proxy do Spring,
+ * entao {@code @Transactional} neles nao abriria transacao nenhuma — e escrita
+ * via {@code EntityManager} sem transacao falha.
  */
 @SpringBootTest
 public abstract class IntegracaoBase {
@@ -43,7 +46,7 @@ public abstract class IntegracaoBase {
 	}
 
 	@Autowired
-	protected EntityManager em;
+	protected JdbcTemplate jdbc;
 
 	/**
 	 * Zera o cadastro entre testes.
@@ -52,8 +55,25 @@ public abstract class IntegracaoBase {
 	 * porque parte da suite precisa de commits reais — o teste de concorrencia so
 	 * faz sentido com duas transacoes de verdade disputando o mesmo espaco.
 	 */
-	@Transactional
 	protected void limparCadastro() {
-		em.createNativeQuery("TRUNCATE TABLE imovel, proprietario RESTART IDENTITY CASCADE").executeUpdate();
+		jdbc.execute("TRUNCATE TABLE imovel, proprietario RESTART IDENTITY CASCADE");
+	}
+
+	protected long contar(String sql, Object... parametros) {
+		Long total = jdbc.queryForObject(sql, Long.class, parametros);
+		return total == null ? 0 : total;
+	}
+
+	protected String consultarTexto(String sql, Object... parametros) {
+		return jdbc.queryForObject(sql, String.class, parametros);
+	}
+
+	protected double consultarDouble(String sql, Object... parametros) {
+		Double valor = jdbc.queryForObject(sql, Double.class, parametros);
+		return valor == null ? 0 : valor;
+	}
+
+	protected boolean consultarBooleano(String sql, Object... parametros) {
+		return Boolean.TRUE.equals(jdbc.queryForObject(sql, Boolean.class, parametros));
 	}
 }

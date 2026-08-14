@@ -18,6 +18,7 @@ describe('formulario de imovel', () => {
       areaM2: 390,
       larguraM: null,
       comprimentoM: null,
+      geometria: null,
       ativo: true,
     });
     return form;
@@ -138,6 +139,7 @@ describe('formulario de imovel', () => {
         larguraM: null,
         comprimentoM: null,
         possuiGeometria: false,
+        geometria: null,
         ativo: true,
         criadoEm: '2026-01-01T00:00:00Z',
         atualizadoEm: '2026-01-01T00:00:00Z',

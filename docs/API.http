@@ -87,6 +87,88 @@ Content-Type: application/json
 # A resposta traz "possuiGeometria": true e areaM2 = 1000.00 (20 × 50),
 # calculada pelo servidor a partir das dimensões.
 
+### Criar imóvel DESENHANDO o lote no mapa (polígono livre)
+POST {{api}}/imoveis
+Content-Type: application/json
+
+{
+  "proprietarioNome": "Lote Desenhado",
+  "municipio": "Curitiba",
+  "uf": "PR",
+  "bairro": "Batel",
+  "rua": "Avenida do Batel",
+  "numero": "200",
+  "latitude": -25.45,
+  "longitude": -49.30,
+  "geometria": {
+    "type": "Polygon",
+    "coordinates": [[
+      [-49.3010, -25.4510],
+      [-49.2995, -25.4512],
+      [-49.2990, -25.4498],
+      [-49.3005, -25.4494],
+      [-49.3010, -25.4510]
+    ]]
+  },
+  "ativo": true
+}
+
+# A resposta traz larguraM/comprimentoM ausentes, areaM2 calculada pelo
+# ST_Area e latitude/longitude substituídas pelo centroide do desenho.
+# GeoJSON: cada posição é [longitude, latitude], e o anel precisa fechar.
+
+### Desenho com auto-interseção ("gravata") → 400, não 500
+POST {{api}}/imoveis
+Content-Type: application/json
+
+{
+  "proprietarioNome": "Gravata",
+  "municipio": "Curitiba",
+  "uf": "PR",
+  "bairro": "Batel",
+  "rua": "Rua X",
+  "numero": "1",
+  "latitude": -25.46,
+  "longitude": -49.31,
+  "geometria": {
+    "type": "Polygon",
+    "coordinates": [[
+      [-49.3110, -25.4610],
+      [-49.3090, -25.4590],
+      [-49.3110, -25.4590],
+      [-49.3090, -25.4610],
+      [-49.3110, -25.4610]
+    ]]
+  },
+  "ativo": true
+}
+
+### Dimensões E desenho juntos → 400: as formas são excludentes
+POST {{api}}/imoveis
+Content-Type: application/json
+
+{
+  "proprietarioNome": "Indeciso",
+  "municipio": "Curitiba",
+  "uf": "PR",
+  "bairro": "Batel",
+  "rua": "Rua Y",
+  "numero": "2",
+  "latitude": -25.4420,
+  "longitude": -49.2920,
+  "larguraM": 20,
+  "comprimentoM": 50,
+  "geometria": {
+    "type": "Polygon",
+    "coordinates": [[
+      [-49.2925, -25.4425], [-49.2915, -25.4425],
+      [-49.2915, -25.4415], [-49.2925, -25.4415],
+      [-49.2925, -25.4425]
+    ]]
+  },
+  "ativo": true
+}
+
 ### O MESMO lugar de novo → 409 com o id do imóvel conflitante
 POST {{api}}/imoveis
 Content-Type: application/json

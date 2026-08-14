@@ -203,9 +203,24 @@
         <p class="campo__erro" role="alert">{{ mensagem }}</p>
       }
 
+      <app-mapa-editor
+        [latitude]="form.controls.latitude.value"
+        [longitude]="form.controls.longitude.value"
+        [larguraM]="form.controls.larguraM.value"
+        [comprimentoM]="form.controls.comprimentoM.value"
+        [geometriaInicial]="geometriaCarregada()"
+        (pontoEscolhido)="aoEscolherPonto($event)"
+        (poligonoAlterado)="aoDesenharPoligono($event)"
+      />
+
       <p class="campo__dica">
-        Com largura e comprimento preenchidos, o sistema gera o polígono do lote
-        (EPSG:31982) e recusa o cadastro se ele intersectar outro imóvel.
+        @if (desenhando()) {
+          O lote desenhado é gravado como polígono em EPSG:31982. Área e ponto do imóvel
+          passam a ser calculados a partir dele pelo PostGIS.
+        } @else {
+          Com largura e comprimento preenchidos, o sistema gera o polígono do lote
+          (EPSG:31982) e recusa o cadastro se ele intersectar outro imóvel.
+        }
       </p>
 
       <div class="campo campo--checkbox">

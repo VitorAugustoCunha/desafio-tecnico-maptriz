@@ -87,6 +87,56 @@ public class GeometriaService {
 		log.debug("Geometria gravada para o imovel {} ({} linha(s))", idImovel, atualizados);
 	}
 
+	/**
+	 * Verifica e grava um poligono <b>desenhado no mapa</b>.
+	 *
+	 * <p>Mesmo advisory lock do retangulo — e o mesmo espaco em disputa, então
+	 * precisa ser a mesma fila. Um desenho e um retangulo concorrendo pela mesma
+	 * area têm que se enxergar.
+	 *
+	 * @return area e centroide derivados do desenho, para o imovel ficar coerente
+	 *         com a geometria gravada
+	 * @throws ConflitoEspacialException se o desenho intersecta outro imovel
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public GeometriaRepository.AnaliseDoPoligono aplicarPoligono(Long idImovel, String geoJson) {
+		geometrias.bloquearEscritaGeometrica();
+
+		GeometriaRepository.AnaliseDoPoligono analise = geometrias.analisar(geoJson);
+
+		if (!analise.ehPoligono()) {
+			throw new IllegalArgumentException("A geometria enviada nao e um poligono.");
+		}
+
+		// Auto-interseccao ("gravata") e o erro mais comum de quem desenha a mao.
+		// Precisa ser barrado aqui: ST_Intersects sobre geometria invalida pode
+		// lancar erro de topologia, e a constraint do banco devolveria 500.
+		if (!analise.valida()) {
+			throw new IllegalArgumentException(
+					"O poligono desenhado e invalido: verifique se as bordas nao se cruzam.");
+		}
+
+		long idAtual = idImovel == null ? GeometriaRepository.SEM_IMOVEL_ATUAL : idImovel;
+
+		Long idConflitante = geometrias.conflitoComPoligono(idAtual, geoJson);
+
+		if (idConflitante != null) {
+			log.info("Desenho do imovel {} recusado: area conflita com o imovel {}", idImovel, idConflitante);
+			throw new ConflitoEspacialException(idConflitante);
+		}
+
+		geometrias.gravarPoligono(idImovel, geoJson);
+
+		log.debug("Poligono desenhado gravado para o imovel {} ({} m²)", idImovel, analise.areaM2());
+
+		return analise;
+	}
+
+	/** Geometria atual do imovel em GeoJSON (4326), para a edicao redesenhar o lote. */
+	public String geoJsonDoImovel(Long idImovel) {
+		return geometrias.geoJsonDoImovel(idImovel);
+	}
+
 	/** Remove o poligono quando o imovel deixa de ter dimensoes (volta a ser so ponto). */
 	@Transactional(propagation = Propagation.MANDATORY)
 	public void removerGeometria(Long idImovel) {

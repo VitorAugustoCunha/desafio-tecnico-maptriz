@@ -1,6 +1,6 @@
 import { FormControl, FormGroup, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 
-import { Imovel, ImovelRequest } from '../../../core/models/imovel.model';
+import { Imovel, ImovelRequest, PoligonoGeoJson } from '../../../core/models/imovel.model';
 
 /**
  * Formulario tipado do imovel.
@@ -21,6 +21,8 @@ export type ImovelFormGroup = FormGroup<{
   areaM2: FormControl<number | null>;
   larguraM: FormControl<number | null>;
   comprimentoM: FormControl<number | null>;
+  /** Lote desenhado no mapa. Excludente com largura/comprimento. */
+  geometria: FormControl<PoligonoGeoJson | null>;
   ativo: FormControl<boolean>;
 }>;
 
@@ -60,10 +62,27 @@ export function criarImovelForm(): ImovelFormGroup {
       areaM2: new FormControl<number | null>(null, { validators: [maiorQueZero()] }),
       larguraM: new FormControl<number | null>(null, { validators: [maiorQueZero()] }),
       comprimentoM: new FormControl<number | null>(null, { validators: [maiorQueZero()] }),
+      geometria: new FormControl<PoligonoGeoJson | null>(null),
       ativo: new FormControl(true, { nonNullable: true }),
     },
-    { validators: [dimensoesEmPar(), tamanhoInformavel()] },
+    { validators: [dimensoesEmPar(), tamanhoInformavel(), formaUnica()] },
   );
+}
+
+/**
+ * Dimensões e desenho são excludentes — espelha o `isFormaUnica` do backend.
+ *
+ * <p>Aceitar as duas obrigaria a eleger uma vencedora em silêncio, e o usuário
+ * descobriria qual foi olhando o mapa depois de salvar.
+ */
+export function formaUnica(): ValidatorFn {
+  return (grupo): ValidationErrors | null => {
+    const temDimensoes =
+      preenchido(grupo.get('larguraM')?.value) && preenchido(grupo.get('comprimentoM')?.value);
+    const temDesenho = grupo.get('geometria')?.value != null;
+
+    return temDimensoes && temDesenho ? { formaUnica: true } : null;
+  };
 }
 
 /** Aceita vazio (o campo pode ser opcional), mas nao aceita zero nem negativo. */
@@ -93,14 +112,15 @@ export function dimensoesEmPar(): ValidatorFn {
   };
 }
 
-/** Sem dimensoes, a area precisa vir preenchida. Espelha `isAreaInformavel`. */
+/** Sem dimensoes e sem desenho, a area precisa vir preenchida. Espelha `isAreaInformavel`. */
 export function tamanhoInformavel(): ValidatorFn {
   return (grupo): ValidationErrors | null => {
     const area = grupo.get('areaM2')?.value;
     const largura = grupo.get('larguraM')?.value;
     const comprimento = grupo.get('comprimentoM')?.value;
+    const desenho = grupo.get('geometria')?.value;
 
-    if (preenchido(area) || (preenchido(largura) && preenchido(comprimento))) {
+    if (preenchido(area) || (preenchido(largura) && preenchido(comprimento)) || desenho != null) {
       return null;
     }
     return { tamanhoInformavel: true };
@@ -125,6 +145,10 @@ export function preencherForm(form: ImovelFormGroup, imovel: Imovel): void {
     areaM2: imovel.areaM2,
     larguraM: imovel.larguraM,
     comprimentoM: imovel.comprimentoM,
+    // Só entra como desenho quando o lote NÃO veio de largura x comprimento:
+    // um retângulo continua sendo editado pelas dimensões, que é mais preciso
+    // do que arrastar quatro vértices.
+    geometria: imovel.larguraM === null && imovel.geometria != null ? imovel.geometria : null,
     ativo: imovel.ativo,
   });
 }
@@ -133,8 +157,14 @@ export function preencherForm(form: ImovelFormGroup, imovel: Imovel): void {
 export function formParaRequest(form: ImovelFormGroup): ImovelRequest {
   const valor = form.getRawValue();
 
-  const larguraM = numeroOuNulo(valor.larguraM);
-  const comprimentoM = numeroOuNulo(valor.comprimentoM);
+  const geometria = valor.geometria ?? null;
+
+  // Desenho e dimensões são excludentes: com o lote desenhado, largura e
+  // comprimento não são enviados.
+  const larguraM = geometria !== null ? null : numeroOuNulo(valor.larguraM);
+  const comprimentoM = geometria !== null ? null : numeroOuNulo(valor.comprimentoM);
+
+  const areaDerivada = geometria !== null || (larguraM !== null && comprimentoM !== null);
 
   return {
     proprietarioNome: valor.proprietarioNome.trim(),
@@ -145,10 +175,11 @@ export function formParaRequest(form: ImovelFormGroup): ImovelRequest {
     numero: valor.numero.trim(),
     latitude: Number(valor.latitude),
     longitude: Number(valor.longitude),
-    // Com dimensoes, o servidor calcula a area a partir delas.
-    areaM2: larguraM !== null && comprimentoM !== null ? null : numeroOuNulo(valor.areaM2),
+    // Com dimensões ou com desenho, quem calcula a área é o servidor.
+    areaM2: areaDerivada ? null : numeroOuNulo(valor.areaM2),
     larguraM,
     comprimentoM,
+    geometria,
     ativo: valor.ativo,
   };
 }

@@ -25,7 +25,7 @@ class ImovelMapperTest {
 	void normalizaTextos() {
 		ImovelRequest request = new ImovelRequest(
 				"Maria Souza", "  Sao   Paulo  ", "SP", " Pinheiros ", "Rua   dos  Pinheiros ", " 1245 ",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, true);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, null, true);
 
 		DadosDoImovel dados = ImovelMapper.paraDados(request);
 
@@ -66,6 +66,6 @@ class ImovelMapperTest {
 
 	private static ImovelRequest requisicao(String uf, BigDecimal largura, BigDecimal comprimento, BigDecimal area) {
 		return new ImovelRequest("Maria Souza", "Sao Paulo", uf, "Centro", "Rua A", "10",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), area, largura, comprimento, true);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), area, largura, comprimento, null, true);
 	}
 }

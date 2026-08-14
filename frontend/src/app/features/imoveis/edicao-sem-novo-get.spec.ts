@@ -83,6 +83,7 @@ describe('requisito 3: voltar da edicao nao dispara novo GET da listagem', () =>
     larguraM: null,
     comprimentoM: null,
     possuiGeometria: false,
+    geometria: null,
     ativo: true,
     criadoEm: '2026-01-01T00:00:00Z',
     atualizadoEm: '2026-01-01T00:00:00Z',
@@ -207,6 +208,7 @@ describe('requisito 3: voltar da edicao nao dispara novo GET da listagem', () =>
       areaM2: 198.4,
       larguraM: null,
       comprimentoM: null,
+      geometria: null,
       ativo: true,
     });
 

@@ -37,6 +37,7 @@ describe('fluxo completo de imovel', () => {
     larguraM: null,
     comprimentoM: null,
     possuiGeometria: false,
+    geometria: null,
     ativo: true,
     criadoEm: '2026-01-01T00:00:00Z',
     atualizadoEm: '2026-01-01T00:00:00Z',
@@ -98,6 +99,7 @@ describe('fluxo completo de imovel', () => {
       areaM2: 390,
       larguraM: null,
       comprimentoM: null,
+      geometria: null,
       ativo: true,
     });
 
@@ -195,6 +197,7 @@ describe('fluxo completo de imovel', () => {
       areaM2: 390,
       larguraM: null,
       comprimentoM: null,
+      geometria: null,
       ativo: true,
     });
 
@@ -234,6 +237,7 @@ describe('fluxo completo de imovel', () => {
       areaM2: null,
       larguraM: 20,
       comprimentoM: 50,
+      geometria: null,
       ativo: true,
     });
 

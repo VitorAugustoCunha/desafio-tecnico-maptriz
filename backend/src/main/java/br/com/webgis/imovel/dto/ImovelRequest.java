@@ -2,6 +2,7 @@ package br.com.webgis.imovel.dto;
 
 import java.math.BigDecimal;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -80,6 +81,16 @@ public record ImovelRequest(
 		@Digits(integer = 8, fraction = 2, message = "no maximo 2 casas decimais")
 		BigDecimal comprimentoM,
 
+		/**
+		 * Poligono desenhado no mapa, em GeoJSON (EPSG:4326).
+		 *
+		 * <p>Alternativa a largura/comprimento: um lote real raramente e um
+		 * retangulo alinhado aos eixos. Quando vem preenchido, a area e o ponto
+		 * do imovel passam a ser <b>derivados</b> do proprio desenho.
+		 */
+		@Valid
+		PoligonoGeoJson geometria,
+
 		@NotNull(message = "informe se o imovel esta ativo")
 		Boolean ativo) {
 
@@ -92,14 +103,35 @@ public record ImovelRequest(
 		return (larguraM == null) == (comprimentoM == null);
 	}
 
-	/** Sem dimensoes, a area precisa vir explicita — senao nao ha como saber o tamanho do lote. */
-	@AssertTrue(message = "informe a area, ou largura e comprimento")
+	/** Sem dimensoes e sem desenho, a area precisa vir explicita. */
+	@AssertTrue(message = "informe a area, ou largura e comprimento, ou desenhe o lote no mapa")
 	public boolean isAreaInformavel() {
-		return areaM2 != null || (larguraM != null && comprimentoM != null);
+		return areaM2 != null || possuiDimensoes() || possuiPoligonoDesenhado();
 	}
 
-	/** {@code true} quando o request pede geometria real (tarefa 8). */
+	/**
+	 * As duas formas de definir o lote sao excludentes.
+	 *
+	 * <p>Aceitar as duas juntas exigiria eleger uma vencedora em silencio — e o
+	 * usuario descobriria qual foi olhando o mapa depois de salvar.
+	 */
+	@AssertTrue(message = "escolha uma forma: dimensoes OU desenho no mapa, nao as duas")
+	public boolean isFormaUnica() {
+		return !(possuiDimensoes() && possuiPoligonoDesenhado());
+	}
+
+	/** {@code true} quando o lote e um retangulo derivado do centro e das dimensoes. */
 	public boolean possuiDimensoes() {
 		return larguraM != null && comprimentoM != null;
+	}
+
+	/** {@code true} quando o lote foi desenhado no mapa. */
+	public boolean possuiPoligonoDesenhado() {
+		return geometria != null;
+	}
+
+	/** {@code true} quando o request pede geometria real, de qualquer uma das formas. */
+	public boolean possuiGeometria() {
+		return possuiDimensoes() || possuiPoligonoDesenhado();
 	}
 }

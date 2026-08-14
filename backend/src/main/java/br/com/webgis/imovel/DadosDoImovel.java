@@ -2,6 +2,8 @@ package br.com.webgis.imovel;
 
 import java.math.BigDecimal;
 
+import br.com.webgis.imovel.dto.PoligonoGeoJson;
+
 /**
  * Dados editaveis de um imovel, ja normalizados e validados.
  *
@@ -20,5 +22,15 @@ public record DadosDoImovel(
 		BigDecimal areaM2,
 		BigDecimal larguraM,
 		BigDecimal comprimentoM,
+		/** Poligono desenhado no mapa, quando o lote nao veio de largura x comprimento. */
+		PoligonoGeoJson poligono,
 		boolean ativo) {
+
+	public boolean temDimensoes() {
+		return larguraM != null && comprimentoM != null;
+	}
+
+	public boolean temPoligonoDesenhado() {
+		return poligono != null;
+	}
 }

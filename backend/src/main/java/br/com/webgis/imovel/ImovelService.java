@@ -1,5 +1,8 @@
 package br.com.webgis.imovel;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -7,11 +10,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import br.com.webgis.gis.GeometriaService;
 import br.com.webgis.imovel.dto.ImovelFiltro;
 import br.com.webgis.imovel.dto.ImovelListItem;
 import br.com.webgis.imovel.dto.ImovelRequest;
 import br.com.webgis.imovel.dto.ImovelResponse;
+import br.com.webgis.imovel.dto.PoligonoGeoJson;
 import br.com.webgis.proprietario.Proprietario;
 import br.com.webgis.proprietario.ProprietarioService;
 import br.com.webgis.shared.error.RecursoNaoEncontradoException;
@@ -34,12 +41,14 @@ public class ImovelService {
 	private final ImovelRepository repositorio;
 	private final ProprietarioService proprietarios;
 	private final GeometriaService geometrias;
+	private final ObjectMapper json;
 
 	public ImovelService(ImovelRepository repositorio, ProprietarioService proprietarios,
-			GeometriaService geometrias) {
+			GeometriaService geometrias, ObjectMapper json) {
 		this.repositorio = repositorio;
 		this.proprietarios = proprietarios;
 		this.geometrias = geometrias;
+		this.json = json;
 	}
 
 	public Page<ImovelListItem> listar(ImovelFiltro filtro, Pageable paginacao) {
@@ -49,7 +58,12 @@ public class ImovelService {
 
 	public ImovelResponse buscar(Long id) {
 		Imovel imovel = buscarEntidade(id);
-		return ImovelMapper.paraResponse(imovel, geometrias.possuiGeometria(id));
+
+		// O detalhe carrega a geometria para a tela de edicao poder redesenhar o
+		// lote exatamente como esta gravado. A listagem continua sem geometria.
+		String geometria = geometrias.geoJsonDoImovel(id);
+
+		return ImovelMapper.paraResponse(imovel, geometria != null, geometria);
 	}
 
 	@Transactional
@@ -103,22 +117,46 @@ public class ImovelService {
 	}
 
 	/**
-	 * Sincroniza o poligono com as dimensoes informadas.
+	 * Sincroniza o poligono com a forma informada.
+	 *
+	 * <p>Duas formas de definir o lote, uma so regra de conflito: as duas passam
+	 * pelo mesmo advisory lock e pela mesma checagem de interseccao, entao um
+	 * desenho e um retangulo disputando a mesma area se enxergam.
 	 *
 	 * @return {@code true} se o imovel ficou com geometria gravada
 	 */
 	private boolean aplicarGeometria(Imovel imovel, DadosDoImovel dados) {
-		boolean temDimensoes = dados.larguraM() != null && dados.comprimentoM() != null;
-
-		if (temDimensoes) {
+		if (dados.temDimensoes()) {
 			geometrias.aplicarGeometria(imovel.getId(), dados.latitude(), dados.longitude(),
 					dados.larguraM(), dados.comprimentoM());
 			return true;
 		}
 
-		// Imovel que perdeu as dimensoes volta a ser apenas ponto. Sem isso, o
+		if (dados.temPoligonoDesenhado()) {
+			var analise = geometrias.aplicarPoligono(imovel.getId(), serializar(dados.poligono()));
+
+			// Area e ponto passam a ser derivados do desenho.
+			imovel.sincronizarComPoligono(
+					BigDecimal.valueOf(analise.areaM2()).setScale(2, RoundingMode.HALF_UP),
+					BigDecimal.valueOf(analise.latitude()).setScale(7, RoundingMode.HALF_UP),
+					BigDecimal.valueOf(analise.longitude()).setScale(7, RoundingMode.HALF_UP));
+
+			repositorio.saveAndFlush(imovel);
+			return true;
+		}
+
+		// Imovel que perdeu a geometria volta a ser apenas ponto. Sem isso, o
 		// poligono antigo continuaria bloqueando a area no banco.
 		geometrias.removerGeometria(imovel.getId());
 		return false;
+	}
+
+	private String serializar(PoligonoGeoJson poligono) {
+		try {
+			return json.writeValueAsString(poligono);
+		} catch (JsonProcessingException e) {
+			// A Bean Validation ja garantiu a forma; chegar aqui e bug, nao entrada ruim.
+			throw new IllegalStateException("Nao foi possivel serializar o poligono desenhado", e);
+		}
 	}
 }

@@ -279,6 +279,58 @@ chamada do template no código original.
 
 ---
 
+## ADR-011 — Desenhar o lote no mapa, sem abandonar o formato do enunciado
+
+**Contexto.** A tarefa 8 especifica o lote como retângulo derivado de
+centro + largura + comprimento. Mas lote real raramente é um retângulo alinhado
+aos eixos — num cadastro multifinalitário, a forma vem da matrícula.
+
+**Decisão.** Suportar **as duas formas**, excludentes entre si:
+
+| Modo | Entrada | Área e ponto |
+|------|---------|--------------|
+| Dimensões | centro + largura/comprimento | área = largura × comprimento |
+| Desenho | polígono GeoJSON traçado no mapa | derivados do polígono pelo PostGIS |
+
+**Por que não substituir.** Trocar o retângulo por desenho livre entregaria algo
+mais poderoso, mas deixaria de atender ao que a tarefa 8 pede. Manter os dois
+preserva a conformidade e ainda cobre o caso real.
+
+**Por que excludentes.** Aceitar dimensões e desenho juntos obrigaria a eleger um
+vencedor em silêncio, e o usuário descobriria qual foi olhando o mapa depois de
+salvar. Validado nos dois lados (`isFormaUnica` no backend, `formaUnica()` no
+formulário).
+
+**No modo desenho, a geometria é a fonte da verdade.** Área vem do `ST_Area` e o
+ponto do imóvel vem do `ST_Centroid`, ambos calculados pelo PostGIS e gravados
+por cima do que o cliente enviou. Guardar a área que o cliente mandou deixaria o
+imóvel afirmando um tamanho que o próprio polígono desmente — e o mapa mostraria
+a segunda versão. Há teste que envia `areaM2: 999999` com um desenho pequeno e
+exige que o valor gravado seja o do polígono.
+
+**Validação em camadas, cada uma no lugar certo:**
+
+1. **Bean Validation** (`PoligonoGeoJson`, tipado): tipo `Polygon`, anel fechado,
+   mínimo de 4 posições, coordenadas na faixa válida. Rejeita com `400` antes de
+   qualquer consulta.
+2. **`ST_IsValid`** antes de comparar: auto-interseção (a "gravata", erro clássico
+   de quem desenha à mão) vira `400` com mensagem útil.
+3. **`ST_Intersects`** com o mesmo advisory lock do retângulo — as duas formas
+   disputam o mesmo espaço, então precisam estar na mesma fila. Há teste de
+   desenho invadindo retângulo e de retângulo invadindo desenho.
+
+A ordem importa: `ST_Intersects` sobre geometria inválida pode lançar erro de
+topologia do GEOS, o que viraria `500` e ainda envenenaria a transação. Por isso
+validar e comparar são duas consultas, não uma.
+
+**proj4 no frontend.** Para a pré-visualização do retângulo ser *a mesma
+geometria* que será gravada — e não uma ilustração aproximada — o cliente
+registra o EPSG:31982 e reproduz o cálculo do servidor: projeta o centro, soma
+metade das dimensões em cada eixo, volta para 4326. Custa ~50 kB e elimina a
+divergência entre o que se vê e o que se salva.
+
+---
+
 ## ADR-010 — Mesma origem em produção; CORS só em desenvolvimento
 
 **Contexto.** O controller original tinha `@CrossOrigin(origins = "*")`,

@@ -38,6 +38,12 @@ export interface Imovel {
   readonly comprimentoM: number | null;
   /** `true` quando existe poligono em EPSG:31982 gravado. */
   readonly possuiGeometria: boolean;
+  /**
+   * Poligono do lote em GeoJSON (4326), ou `null`.
+   *
+   * <p>So vem no detalhe — a listagem nunca carrega geometria.
+   */
+  readonly geometria: PoligonoGeoJson | null;
   readonly ativo: boolean;
   readonly criadoEm: string;
   readonly atualizadoEm: string;
@@ -46,6 +52,15 @@ export interface Imovel {
 export interface ProprietarioResumo {
   readonly id: number;
   readonly nome: string;
+}
+
+/** Posição GeoJSON: `[longitude, latitude]`, nesta ordem. */
+export type Posicao = readonly [number, number];
+
+/** Polígono do lote em GeoJSON (WGS 84), como trafega na API. */
+export interface PoligonoGeoJson {
+  readonly type: 'Polygon';
+  readonly coordinates: readonly (readonly Posicao[])[];
 }
 
 /** Corpo enviado na criacao e na atualizacao. */
@@ -61,6 +76,8 @@ export interface ImovelRequest {
   readonly areaM2: number | null;
   readonly larguraM: number | null;
   readonly comprimentoM: number | null;
+  /** Lote desenhado no mapa. Excludente com largura/comprimento. */
+  readonly geometria: PoligonoGeoJson | null;
   readonly ativo: boolean;
 }
 

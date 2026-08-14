@@ -151,6 +151,6 @@ class ConcorrenciaGeometriaTest extends IntegracaoBase {
 
 	private static ImovelRequest requisicao(String proprietario, BigDecimal latitude) {
 		return new ImovelRequest(proprietario, "Curitiba", "PR", "Batel", "Avenida do Batel", "1560",
-				latitude, LONGITUDE, null, new BigDecimal("20"), new BigDecimal("50"), true);
+				latitude, LONGITUDE, null, new BigDecimal("20"), new BigDecimal("50"), null, true);
 	}
 }

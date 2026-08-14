@@ -96,6 +96,95 @@ public class GeometriaRepository {
 		return new ResultadoVerificacao(valida, idConflitante);
 	}
 
+	/**
+	 * Analisa um poligono desenhado, <b>sem</b> compara-lo com os demais.
+	 *
+	 * <p>Separado da checagem de conflito de proposito: {@code ST_Intersects}
+	 * sobre geometria invalida pode lancar erro de topologia do GEOS, o que
+	 * viraria {@code 500} e ainda envenenaria a transacao. Primeiro se confirma
+	 * que o desenho e um poligono valido; so depois ele e comparado.
+	 *
+	 * <p>Devolve tambem a area e o centroide ja calculados, porque no modo
+	 * desenho os dois passam a ser <b>derivados</b> da geometria — guardar uma
+	 * area que contradiz o poligono seria manter duas versoes da mesma verdade.
+	 */
+	public AnaliseDoPoligono analisar(String geoJson) {
+		Object[] linha = (Object[]) em.createNativeQuery("""
+				WITH entrada AS (
+				    SELECT ST_Transform(
+				               ST_SetSRID(ST_GeomFromGeoJSON(CAST(:geoJson AS text)), 4326),
+				               31982) AS g
+				)
+				SELECT ST_IsValid(e.g)                                          AS valida,
+				       ST_GeometryType(e.g) = 'ST_Polygon'                      AS eh_poligono,
+				       ST_Area(e.g)                                             AS area,
+				       ST_Y(ST_Transform(ST_Centroid(e.g), 4326))               AS latitude,
+				       ST_X(ST_Transform(ST_Centroid(e.g), 4326))               AS longitude
+				  FROM entrada e
+				""")
+				.setParameter("geoJson", geoJson)
+				.getSingleResult();
+
+		return new AnaliseDoPoligono(
+				Boolean.TRUE.equals(linha[0]),
+				Boolean.TRUE.equals(linha[1]),
+				((Number) linha[2]).doubleValue(),
+				((Number) linha[3]).doubleValue(),
+				((Number) linha[4]).doubleValue());
+	}
+
+	/** Primeiro imovel cujo poligono intersecta o desenho, se houver. */
+	public Long conflitoComPoligono(long idImovelAtual, String geoJson) {
+		@SuppressWarnings("unchecked")
+		java.util.List<Object> resultado = em.createNativeQuery("""
+				WITH entrada AS (
+				    SELECT ST_Transform(
+				               ST_SetSRID(ST_GeomFromGeoJSON(CAST(:geoJson AS text)), 4326),
+				               31982) AS g
+				)
+				SELECT i.id
+				  FROM imovel i, entrada e
+				 WHERE i.geom IS NOT NULL
+				   AND i.id <> :idImovelAtual
+				   AND ST_Intersects(i.geom, e.g)
+				 ORDER BY i.id
+				 LIMIT 1
+				""")
+				.setParameter("geoJson", geoJson)
+				.setParameter("idImovelAtual", idImovelAtual)
+				.getResultList();
+
+		return resultado.isEmpty() ? null : ((Number) resultado.get(0)).longValue();
+	}
+
+	/** Grava o poligono desenhado, reprojetado de 4326 para 31982. */
+	public int gravarPoligono(Long idImovel, String geoJson) {
+		return em.createNativeQuery("""
+				UPDATE imovel
+				   SET geom = ST_Transform(
+				                  ST_SetSRID(ST_GeomFromGeoJSON(CAST(:geoJson AS text)), 4326),
+				                  31982)
+				 WHERE id = :id
+				""")
+				.setParameter("geoJson", geoJson)
+				.setParameter("id", idImovel)
+				.executeUpdate();
+	}
+
+	/** Geometria do imovel em GeoJSON (4326), para a tela de edicao redesenhar o lote. */
+	public String geoJsonDoImovel(Long idImovel) {
+		@SuppressWarnings("unchecked")
+		java.util.List<Object> resultado = em.createNativeQuery("""
+				SELECT ST_AsGeoJSON(ST_Transform(geom, 4326), 7)
+				  FROM imovel
+				 WHERE id = :id AND geom IS NOT NULL
+				""")
+				.setParameter("id", idImovel)
+				.getResultList();
+
+		return resultado.isEmpty() ? null : (String) resultado.get(0);
+	}
+
 	/** Area do retangulo em m², calculada pelo PostGIS no plano projetado. Usado nos testes de geometria. */
 	public double areaDoRetangulo(BigDecimal longitude, BigDecimal latitude,
 			BigDecimal larguraM, BigDecimal comprimentoM) {
@@ -121,5 +210,20 @@ public class GeometriaRepository {
 		public boolean temConflito() {
 			return idImovelConflitante != null;
 		}
+	}
+
+	/**
+	 * Resultado da analise de um poligono desenhado.
+	 *
+	 * @param areaM2    area no plano projetado (31982), em metros quadrados
+	 * @param latitude  centroide reprojetado para 4326 — vira o ponto do imovel
+	 * @param longitude centroide reprojetado para 4326
+	 */
+	public record AnaliseDoPoligono(
+			boolean valida,
+			boolean ehPoligono,
+			double areaM2,
+			double latitude,
+			double longitude) {
 	}
 }

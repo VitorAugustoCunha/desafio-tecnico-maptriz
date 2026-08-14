@@ -32,6 +32,7 @@ public final class ImovelMapper {
 				areaDe(request),
 				request.larguraM(),
 				request.comprimentoM(),
+				request.geometria(),
 				Boolean.TRUE.equals(request.ativo()));
 	}
 
@@ -47,10 +48,20 @@ public final class ImovelMapper {
 		if (request.possuiDimensoes()) {
 			return request.larguraM().multiply(request.comprimentoM()).setScale(2, RoundingMode.HALF_UP);
 		}
+		if (request.possuiPoligonoDesenhado()) {
+			// Provisorio: o valor definitivo vem do ST_Area do poligono gravado.
+			// Aqui basta um numero positivo para satisfazer o NOT NULL da coluna
+			// no INSERT que precede a gravacao da geometria.
+			return request.areaM2() == null ? BigDecimal.ONE : request.areaM2();
+		}
 		return request.areaM2();
 	}
 
 	public static ImovelResponse paraResponse(Imovel imovel, boolean possuiGeometria) {
+		return paraResponse(imovel, possuiGeometria, null);
+	}
+
+	public static ImovelResponse paraResponse(Imovel imovel, boolean possuiGeometria, String geometriaGeoJson) {
 		return new ImovelResponse(
 				imovel.getId(),
 				new ImovelResponse.ProprietarioResumo(
@@ -67,6 +78,7 @@ public final class ImovelMapper {
 				imovel.getLarguraM(),
 				imovel.getComprimentoM(),
 				possuiGeometria,
+				geometriaGeoJson,
 				imovel.isAtivo(),
 				imovel.getCriadoEm(),
 				imovel.getAtualizadoEm());

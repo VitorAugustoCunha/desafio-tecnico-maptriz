@@ -83,6 +83,7 @@ describe('ImovelApiService', () => {
       areaM2: 100,
       larguraM: null,
       comprimentoM: null,
+      geometria: null,
       ativo: true,
     };
 
@@ -106,6 +107,7 @@ describe('ImovelApiService', () => {
         areaM2: 100,
         larguraM: null,
         comprimentoM: null,
+        geometria: null,
         ativo: true,
       })
       .subscribe();

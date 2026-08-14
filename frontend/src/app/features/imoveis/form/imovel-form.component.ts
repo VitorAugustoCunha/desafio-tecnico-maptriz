@@ -4,7 +4,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { ImovelApiService } from '../../../core/api/imovel-api.service';
 import { traduzirErro } from '../../../core/api/erro-da-api';
-import { Imovel } from '../../../core/models/imovel.model';
+import { Imovel, PoligonoGeoJson } from '../../../core/models/imovel.model';
+import { MapaEditorComponent } from './mapa-editor.component';
 import { ErroDaApi } from '../../../core/models/problema.model';
 import { queryParamsParaConsulta } from '../../../core/state/consulta-params';
 import { ImoveisStore } from '../../../core/state/imoveis.store';
@@ -21,7 +22,7 @@ import { criarImovelForm, formParaRequest, preencherForm } from './imovel-form.m
 @Component({
   selector: 'app-imovel-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, MapaEditorComponent],
   templateUrl: './imovel-form.component.html',
   styleUrl: './imovel-form.component.scss',
 })
@@ -51,8 +52,14 @@ export class ImovelFormComponent {
   readonly erroDeCarga = signal<ErroDaApi | null>(null);
   readonly erroDoServidor = signal<ErroDaApi | null>(null);
 
-  /** `true` quando as duas dimensoes estao preenchidas: a area passa a ser derivada. */
+  /** `true` quando a area passa a ser derivada (por dimensoes ou por desenho). */
   readonly areaDerivada = signal(false);
+
+  /** `true` quando o lote foi desenhado no mapa: largura e comprimento saem de cena. */
+  readonly desenhando = signal(false);
+
+  /** Geometria carregada do servidor, para o mapa redesenhar o lote na edicao. */
+  readonly geometriaCarregada = signal<PoligonoGeoJson | null>(null);
 
   private imovelCarregado: Imovel | null = null;
 
@@ -62,14 +69,17 @@ export class ImovelFormComponent {
     }
 
     this.form.valueChanges.subscribe((valor) => {
-      const derivada = preenchido(valor.larguraM) && preenchido(valor.comprimentoM);
+      const temDesenho = valor.geometria != null;
+      const derivada = temDesenho || (preenchido(valor.larguraM) && preenchido(valor.comprimentoM));
+
+      this.desenhando.set(temDesenho);
       this.areaDerivada.set(derivada);
 
-      if (derivada && this.form.controls.areaM2.enabled) {
-        this.form.controls.areaM2.disable({ emitEvent: false });
-      } else if (!derivada && this.form.controls.areaM2.disabled) {
-        this.form.controls.areaM2.enable({ emitEvent: false });
-      }
+      // Campo cujo valor o servidor vai calcular fica desabilitado, em vez de
+      // aceitar um numero que sera descartado sem aviso.
+      alternar(this.form.controls.areaM2, !derivada);
+      alternar(this.form.controls.larguraM, !temDesenho);
+      alternar(this.form.controls.comprimentoM, !temDesenho);
     });
   }
 
@@ -83,6 +93,11 @@ export class ImovelFormComponent {
         // No codigo original, `this.form = i` fazia a tabela mudar enquanto se
         // digitava, e continuar alterada mesmo ao cancelar.
         preencherForm(this.form, imovel);
+
+        // Lote desenhado volta para o mapa como desenho; retangulo continua
+        // sendo editado pelas dimensoes, que e mais preciso.
+        this.geometriaCarregada.set(imovel.larguraM === null ? imovel.geometria : null);
+
         this.carregando.set(false);
       },
       error: (erro: unknown) => {
@@ -134,6 +149,24 @@ export class ImovelFormComponent {
       },
       error: (erro: unknown) => this.tratarErro(erro),
     });
+  }
+
+  /** O mapa devolveu um ponto (clique no modo dimensoes, ou centro do desenho). */
+  aoEscolherPonto(ponto: { latitude: number; longitude: number }): void {
+    this.form.patchValue({ latitude: ponto.latitude, longitude: ponto.longitude });
+    this.form.controls.latitude.markAsTouched();
+    this.form.controls.longitude.markAsTouched();
+  }
+
+  /** O mapa devolveu o lote desenhado, ou `null` quando o desenho foi apagado. */
+  aoDesenharPoligono(poligono: PoligonoGeoJson | null): void {
+    this.form.controls.geometria.setValue(poligono);
+
+    if (poligono !== null) {
+      // As formas sao excludentes: o desenho manda, as dimensoes saem.
+      this.form.controls.larguraM.setValue(null, { emitEvent: false });
+      this.form.controls.comprimentoM.setValue(null, { emitEvent: false });
+    }
   }
 
   cancelar(): void {
@@ -216,7 +249,10 @@ export class ImovelFormComponent {
       return 'Informe largura e comprimento juntos, ou nenhum dos dois.';
     }
     if (this.form.errors?.['tamanhoInformavel']) {
-      return 'Informe a área, ou largura e comprimento.';
+      return 'Informe a área, ou largura e comprimento, ou desenhe o lote no mapa.';
+    }
+    if (this.form.errors?.['formaUnica']) {
+      return 'Escolha uma forma: dimensões OU desenho no mapa, não as duas.';
     }
     return null;
   }
@@ -224,4 +260,13 @@ export class ImovelFormComponent {
 
 function preenchido(valor: unknown): boolean {
   return valor !== null && valor !== undefined && valor !== '';
+}
+
+/** Habilita ou desabilita sem disparar novo ciclo de valueChanges. */
+function alternar(controle: { enabled: boolean; enable: (o?: object) => void; disable: (o?: object) => void }, habilitar: boolean): void {
+  if (habilitar && !controle.enabled) {
+    controle.enable({ emitEvent: false });
+  } else if (!habilitar && controle.enabled) {
+    controle.disable({ emitEvent: false });
+  }
 }

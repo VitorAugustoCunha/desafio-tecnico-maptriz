@@ -118,6 +118,27 @@ public class Imovel {
 		this.proprietario = Objects.requireNonNull(novoProprietario, "proprietario");
 	}
 
+	/**
+	 * Alinha area e ponto com o poligono desenhado.
+	 *
+	 * <p>No modo desenho, quem manda e a geometria: a area vem do
+	 * {@code ST_Area} e o ponto vem do centroide, ambos calculados pelo PostGIS.
+	 * Guardar a area que o cliente enviou deixaria o imovel afirmando um tamanho
+	 * que o proprio poligono desmente — e o mapa mostraria a segunda versao.
+	 *
+	 * <p>As dimensoes sao zeradas porque um lote desenhado nao tem "largura" e
+	 * "comprimento" unicos.
+	 */
+	public void sincronizarComPoligono(BigDecimal areaCalculada, BigDecimal latitudeDoCentroide,
+			BigDecimal longitudeDoCentroide) {
+
+		this.areaM2 = areaCalculada;
+		this.latitude = latitudeDoCentroide;
+		this.longitude = longitudeDoCentroide;
+		this.larguraM = null;
+		this.comprimentoM = null;
+	}
+
 	/** {@code true} quando o imovel tem dimensoes e, portanto, poligono no banco. */
 	public boolean possuiDimensoes() {
 		return larguraM != null && comprimentoM != null;

@@ -354,6 +354,24 @@ antes) nem chamadas HTTP. Ver ADR-007.
 
 ## Decisões GIS: CRS, SRID e a limitação do EPSG:31982
 
+**Duas formas de definir o lote**, excludentes entre si (ADR-011):
+
+| Modo | Entrada | Área e ponto |
+|------|---------|--------------|
+| **Ponto + dimensões** (tarefa 8) | centro + largura/comprimento | área = largura × comprimento |
+| **Desenho no mapa** | polígono traçado vértice a vértice | derivados do polígono pelo PostGIS |
+
+O formulário embute um mapa com as duas abas. No modo dimensões, clicar
+posiciona o centro e o retângulo aparece na hora — calculado no cliente com a
+**mesma projeção do servidor** (o frontend registra o EPSG:31982 via proj4), de
+modo que a prévia é a geometria que será gravada, não uma ilustração. No modo
+desenho, a área e o ponto do imóvel passam a ser calculados pelo PostGIS
+(`ST_Area` e `ST_Centroid`) por cima do que o cliente enviou — guardar uma área
+que contradiz o polígono seria manter duas versões da mesma verdade.
+
+As duas formas compartilham o mesmo advisory lock e a mesma checagem de
+interseção: um desenho e um retângulo disputando a mesma área se enxergam.
+
 **Convenção adotada:** latitude/longitude são o **centro** do lote. Metade da
 largura para cada lado no eixo X, metade do comprimento em cada lado no eixo Y,
 em metros no plano projetado. Há teste conferindo que o centroide do polígono
@@ -435,8 +453,8 @@ Nenhum número aqui é estimado.
 
 | Suíte | Testes | Resultado |
 |-------|-------:|-----------|
-| Backend (JUnit 5 + Testcontainers) | **106** | ✅ todos passando |
-| Frontend (Vitest + TestBed) | **84** | ✅ todos passando |
+| Backend (JUnit 5 + Testcontainers) | **120** | ✅ todos passando |
+| Frontend (Vitest + TestBed) | **95** | ✅ todos passando |
 | Cobertura de linhas (JaCoCo) | **85,8%** | domínio acima de 95% |
 
 **Efeito dos índices** — `EXPLAIN (ANALYZE, BUFFERS)` com **500.012 imóveis**:

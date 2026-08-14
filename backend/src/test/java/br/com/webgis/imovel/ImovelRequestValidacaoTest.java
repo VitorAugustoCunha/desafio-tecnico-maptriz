@@ -49,7 +49,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa latitude fora da faixa (o baseline aceitava 999)")
 	void recusaLatitudeForaDaFaixa() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
-				new BigDecimal("999"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, true);
+				new BigDecimal("999"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, null, true);
 
 		assertThat(campos(request)).contains("latitude");
 	}
@@ -58,7 +58,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa longitude fora da faixa")
 	void recusaLongitudeForaDaFaixa() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
-				new BigDecimal("-23.5"), new BigDecimal("-999"), new BigDecimal("100"), null, null, true);
+				new BigDecimal("-23.5"), new BigDecimal("-999"), new BigDecimal("100"), null, null, null, true);
 
 		assertThat(campos(request)).contains("longitude");
 	}
@@ -67,7 +67,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa UF que nao tem 2 letras (o baseline devolvia 500)")
 	void recusaUfInvalida() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "XXXXX", "Centro", "Rua A", "10",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, true);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, null, true);
 
 		assertThat(campos(request)).contains("uf");
 	}
@@ -76,7 +76,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa textos obrigatorios em branco")
 	void recusaTextosEmBranco() {
 		ImovelRequest request = new ImovelRequest("  ", "", "SP", "  ", "", " ",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, true);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, null, true);
 
 		assertThat(campos(request))
 				.contains("proprietarioNome", "municipio", "bairro", "rua", "numero");
@@ -86,7 +86,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa area negativa ou zero")
 	void recusaAreaNaoPositiva() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("-50"), null, null, true);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("-50"), null, null, null, true);
 
 		assertThat(campos(request)).contains("areaM2");
 	}
@@ -95,7 +95,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa 'ativo' ausente — no baseline isso mudava o estado do imovel sozinho")
 	void recusaAtivoAusente() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, null);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, null, null);
 
 		assertThat(campos(request)).contains("ativo");
 	}
@@ -104,7 +104,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa coordenada nula — no baseline isso apagava a coordenada gravada")
 	void recusaCoordenadaNula() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
-				null, null, new BigDecimal("100"), null, null, true);
+				null, null, new BigDecimal("100"), null, null, null, true);
 
 		assertThat(campos(request)).contains("latitude", "longitude");
 	}
@@ -114,7 +114,7 @@ class ImovelRequestValidacaoTest {
 	void recusaDimensaoSolta() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
 				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"),
-				new BigDecimal("20"), null, true);
+				new BigDecimal("20"), null, null, true);
 
 		assertThat(campos(request)).contains("dimensoesEmPar");
 	}
@@ -123,7 +123,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa imovel sem area e sem dimensoes")
 	void recusaSemTamanho() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), null, null, null, true);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), null, null, null, null, true);
 
 		assertThat(campos(request)).contains("areaInformavel");
 	}
@@ -133,7 +133,7 @@ class ImovelRequestValidacaoTest {
 	void aceitaDimensoesSemArea() {
 		ImovelRequest request = new ImovelRequest("Maria", "Sao Paulo", "SP", "Centro", "Rua A", "10",
 				new BigDecimal("-23.5"), new BigDecimal("-46.6"), null,
-				new BigDecimal("20"), new BigDecimal("50"), true);
+				new BigDecimal("20"), new BigDecimal("50"), null, true);
 
 		assertThat(validador.validate(request)).isEmpty();
 	}
@@ -142,7 +142,7 @@ class ImovelRequestValidacaoTest {
 	@DisplayName("recusa texto acima do tamanho da coluna, em vez de estourar no banco")
 	void recusaTextoLongo() {
 		ImovelRequest request = new ImovelRequest("Maria", "M".repeat(121), "SP", "Centro", "Rua A", "10",
-				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, true);
+				new BigDecimal("-23.5"), new BigDecimal("-46.6"), new BigDecimal("100"), null, null, null, true);
 
 		assertThat(campos(request)).contains("municipio");
 	}
@@ -156,6 +156,6 @@ class ImovelRequestValidacaoTest {
 
 	private static ImovelRequest valido() {
 		return new ImovelRequest("Maria Souza", "Sao Paulo", "SP", "Pinheiros", "Rua dos Pinheiros", "1245",
-				new BigDecimal("-23.5629"), new BigDecimal("-46.6944"), new BigDecimal("320.50"), null, null, true);
+				new BigDecimal("-23.5629"), new BigDecimal("-46.6944"), new BigDecimal("320.50"), null, null, null, true);
 	}
 }

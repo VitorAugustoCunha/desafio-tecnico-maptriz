@@ -75,7 +75,8 @@
           "builder": "@angular/build:unit-test",
           "options": {
             "tsConfig": "tsconfig.spec.json",
-            "buildTarget": "frontend:build:development"
+            "buildTarget": "frontend:build:development",
+            "setupFiles": ["src/test-setup.ts"]
           }
         }
       }

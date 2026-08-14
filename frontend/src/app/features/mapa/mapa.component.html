@@ -1,0 +1,140 @@
+<header class="cabecalho">
+  <div>
+    <h1>Mapa</h1>
+    <p class="cabecalho__subtitulo">
+      Os imóveis são consultados por área visível. Aproxime para ver lote a lote.
+    </p>
+  </div>
+
+  <div class="cabecalho__acoes">
+    <a class="botao botao--neutro" routerLink="/imoveis">Ver listagem</a>
+  </div>
+</header>
+
+<section class="painel">
+  <div class="painel__mapa">
+    <!-- O OpenLayers desenha aqui. A altura vem do CSS: sem altura explicita o mapa nao aparece. -->
+    <div #mapa class="mapa" role="application" aria-label="Mapa dos imóveis cadastrados"></div>
+
+    @if (carregando()) {
+      <div class="sobreposicao" role="status">
+        <span class="carregando" aria-hidden="true"></span>
+        <span>Carregando feições…</span>
+      </div>
+    }
+
+    @if (erro(); as falha) {
+      <div class="sobreposicao sobreposicao--erro" role="alert">
+        <span>{{ falha.mensagem }}</span>
+      </div>
+    }
+
+    @if (vazio()) {
+      <div class="sobreposicao" role="status">
+        <span>Nenhum imóvel nesta área. Afaste o mapa ou navegue para outra região.</span>
+      </div>
+    }
+
+    @if (selecionado(); as escolhido) {
+      <aside class="detalhe" aria-label="Detalhes do imóvel selecionado">
+        <button type="button" class="detalhe__fechar" aria-label="Fechar detalhes" (click)="fecharDetalhe()">
+          &times;
+        </button>
+
+        <h2 class="detalhe__titulo">{{ escolhido.propriedades.proprietarioNome }}</h2>
+
+        <dl class="detalhe__dados">
+          <dt>Município</dt>
+          <dd>{{ escolhido.propriedades.municipio }} / {{ escolhido.propriedades.uf }}</dd>
+
+          <dt>Área</dt>
+          <dd>{{ escolhido.propriedades.areaM2 | number: '1.2-2' }} m²</dd>
+
+          <dt>Geometria</dt>
+          <dd>{{ escolhido.propriedades.poligono ? 'Polígono do lote' : 'Apenas ponto' }}</dd>
+        </dl>
+
+        <div class="detalhe__acoes">
+          @if (escolhido.propriedades.id !== undefined) {
+            <a class="botao botao--pequeno botao--primario" [routerLink]="['/imoveis', escolhido.propriedades.id, 'editar']">
+              Abrir imóvel
+            </a>
+          }
+          @if (escolhido.propriedades.proprietarioId !== undefined) {
+            <a
+              class="botao botao--pequeno botao--neutro"
+              [routerLink]="['/proprietarios', escolhido.propriedades.proprietarioId]"
+            >
+              Ver proprietário
+            </a>
+          }
+        </div>
+      </aside>
+    }
+  </div>
+
+  <aside class="painel__lateral">
+    <h2 class="cartao__titulo">Nesta área</h2>
+
+    @if (estatisticas(); as dados) {
+      <dl class="indicadores">
+        <div class="indicador">
+          <dt>Imóveis</dt>
+          <dd>{{ dados.totalDeImoveis | number }}</dd>
+        </div>
+        <div class="indicador">
+          <dt>Feições desenhadas</dt>
+          <dd>{{ dados.totalDeFeicoes | number }}</dd>
+        </div>
+        <div class="indicador">
+          <dt>Área total</dt>
+          <dd>{{ dados.areaTotalM2 | number: '1.0-0' }} m²</dd>
+        </div>
+        <div class="indicador">
+          <dt>Área média</dt>
+          <dd>{{ dados.areaMediaM2 | number: '1.0-0' }} m²</dd>
+        </div>
+      </dl>
+
+      @if (dados.porMunicipio.length > 0) {
+        <h3 class="subtitulo">Municípios</h3>
+        <ul class="lista-de-municipios">
+          @for (item of dados.porMunicipio.slice(0, 8); track item.municipio) {
+            <li>
+              <span>{{ item.municipio }}</span>
+              <strong>{{ item.quantidade | number }}</strong>
+            </li>
+          }
+        </ul>
+      }
+    } @else {
+      <p class="observacao">Mova o mapa para carregar os imóveis.</p>
+    }
+
+    <div class="diagnostico">
+      @if (agregado()) {
+        <p class="observacao">
+          <strong>Exibindo agregados.</strong> Neste nível de zoom o servidor agrupa os imóveis
+          por célula no PostGIS. Aproxime para ver cada lote.
+        </p>
+      }
+
+      @if (truncado()) {
+        <p class="observacao observacao--aviso">
+          A área tem mais imóveis do que o limite por consulta. Aproxime para ver todos.
+        </p>
+      }
+
+      @if (descartadas() > 0) {
+        <p class="observacao observacao--aviso">
+          {{ descartadas() }} feição(ões) com coordenada inválida foram ignoradas.
+        </p>
+      }
+
+      <p class="observacao">
+        Pipeline: {{ duracaoDoPipelineMs() }} ms
+        {{ usandoWorker() ? '(Web Worker)' : '(thread principal — fallback)' }}
+      </p>
+    </div>
+  </aside>
+</section>

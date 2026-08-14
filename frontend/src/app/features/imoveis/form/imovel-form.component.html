@@ -1,0 +1,226 @@
+<header class="cabecalho">
+  <div>
+    <h1>{{ titulo }}</h1>
+    <p class="cabecalho__subtitulo">
+      Latitude e longitude são o <strong>centro</strong> do lote, em WGS 84.
+    </p>
+  </div>
+</header>
+
+@if (carregando()) {
+  <section class="cartao">
+    <div class="estado" role="status">
+      <span class="carregando" aria-hidden="true"></span>
+      <p>Carregando imóvel…</p>
+    </div>
+  </section>
+} @else if (erroDeCarga(); as falha) {
+  <section class="cartao">
+    <div class="estado estado--erro" role="alert">
+      <p><strong>Não foi possível carregar o imóvel.</strong></p>
+      <p>{{ falha.mensagem }}</p>
+      <a class="botao botao--neutro" routerLink="/imoveis">Voltar para a listagem</a>
+    </div>
+  </section>
+} @else {
+  <form [formGroup]="form" (ngSubmit)="salvar()" novalidate>
+    @if (erroDoServidor(); as falha) {
+      <div class="alerta" role="alert">
+        <strong>{{ falha.mensagem }}</strong>
+        @if (falha.idImovelConflitante !== null) {
+          <a [routerLink]="['/imoveis', falha.idImovelConflitante, 'editar']">
+            Ver o imóvel {{ falha.idImovelConflitante }}
+          </a>
+        }
+      </div>
+    }
+
+    <section class="cartao">
+      <h2 class="cartao__titulo">Titular</h2>
+
+      <div class="campo">
+        <label for="proprietarioNome">Proprietário</label>
+        <input
+          id="proprietarioNome"
+          type="text"
+          formControlName="proprietarioNome"
+          [attr.aria-invalid]="erroDoCampo('proprietarioNome') !== null"
+          [attr.aria-describedby]="'erro-proprietarioNome'"
+          autocomplete="off"
+        />
+        <p class="campo__erro" id="erro-proprietarioNome">{{ erroDoCampo('proprietarioNome') }}</p>
+        <p class="campo__dica">
+          Um titular já cadastrado com o mesmo nome é reaproveitado, não duplicado.
+        </p>
+      </div>
+    </section>
+
+    <section class="cartao">
+      <h2 class="cartao__titulo">Endereço</h2>
+
+      <div class="grade">
+        <div class="campo campo--largo">
+          <label for="municipio">Município</label>
+          <input
+            id="municipio"
+            type="text"
+            formControlName="municipio"
+            [attr.aria-invalid]="erroDoCampo('municipio') !== null"
+            aria-describedby="erro-municipio"
+          />
+          <p class="campo__erro" id="erro-municipio">{{ erroDoCampo('municipio') }}</p>
+        </div>
+
+        <div class="campo campo--curto">
+          <label for="uf">UF</label>
+          <input
+            id="uf"
+            type="text"
+            formControlName="uf"
+            maxlength="2"
+            [attr.aria-invalid]="erroDoCampo('uf') !== null"
+            aria-describedby="erro-uf"
+          />
+          <p class="campo__erro" id="erro-uf">{{ erroDoCampo('uf') }}</p>
+        </div>
+
+        <div class="campo">
+          <label for="bairro">Bairro</label>
+          <input
+            id="bairro"
+            type="text"
+            formControlName="bairro"
+            [attr.aria-invalid]="erroDoCampo('bairro') !== null"
+            aria-describedby="erro-bairro"
+          />
+          <p class="campo__erro" id="erro-bairro">{{ erroDoCampo('bairro') }}</p>
+        </div>
+
+        <div class="campo campo--largo">
+          <label for="rua">Rua</label>
+          <input
+            id="rua"
+            type="text"
+            formControlName="rua"
+            [attr.aria-invalid]="erroDoCampo('rua') !== null"
+            aria-describedby="erro-rua"
+          />
+          <p class="campo__erro" id="erro-rua">{{ erroDoCampo('rua') }}</p>
+        </div>
+
+        <div class="campo campo--curto">
+          <label for="numero">Número</label>
+          <input
+            id="numero"
+            type="text"
+            formControlName="numero"
+            [attr.aria-invalid]="erroDoCampo('numero') !== null"
+            aria-describedby="erro-numero"
+          />
+          <p class="campo__erro" id="erro-numero">{{ erroDoCampo('numero') }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="cartao">
+      <h2 class="cartao__titulo">Localização e dimensões</h2>
+
+      <div class="grade">
+        <div class="campo">
+          <label for="latitude">Latitude</label>
+          <input
+            id="latitude"
+            type="number"
+            step="0.0000001"
+            formControlName="latitude"
+            [attr.aria-invalid]="erroDoCampo('latitude') !== null"
+            aria-describedby="erro-latitude"
+          />
+          <p class="campo__erro" id="erro-latitude">{{ erroDoCampo('latitude') }}</p>
+        </div>
+
+        <div class="campo">
+          <label for="longitude">Longitude</label>
+          <input
+            id="longitude"
+            type="number"
+            step="0.0000001"
+            formControlName="longitude"
+            [attr.aria-invalid]="erroDoCampo('longitude') !== null"
+            aria-describedby="erro-longitude"
+          />
+          <p class="campo__erro" id="erro-longitude">{{ erroDoCampo('longitude') }}</p>
+        </div>
+
+        <div class="campo">
+          <label for="larguraM">Largura (m)</label>
+          <input
+            id="larguraM"
+            type="number"
+            step="0.01"
+            formControlName="larguraM"
+            [attr.aria-invalid]="erroDoCampo('larguraM') !== null"
+            aria-describedby="erro-larguraM"
+          />
+          <p class="campo__erro" id="erro-larguraM">{{ erroDoCampo('larguraM') }}</p>
+        </div>
+
+        <div class="campo">
+          <label for="comprimentoM">Comprimento (m)</label>
+          <input
+            id="comprimentoM"
+            type="number"
+            step="0.01"
+            formControlName="comprimentoM"
+            [attr.aria-invalid]="erroDoCampo('comprimentoM') !== null"
+            aria-describedby="erro-comprimentoM"
+          />
+          <p class="campo__erro" id="erro-comprimentoM">{{ erroDoCampo('comprimentoM') }}</p>
+        </div>
+
+        <div class="campo">
+          <label for="areaM2">Área (m²)</label>
+          <input
+            id="areaM2"
+            type="number"
+            step="0.01"
+            formControlName="areaM2"
+            [attr.aria-invalid]="erroDoCampo('areaM2') !== null"
+            aria-describedby="erro-areaM2 dica-areaM2"
+          />
+          <p class="campo__erro" id="erro-areaM2">{{ erroDoCampo('areaM2') }}</p>
+          <p class="campo__dica" id="dica-areaM2">
+            @if (areaDerivada()) {
+              Calculada a partir da largura e do comprimento.
+            } @else {
+              Informe a área, ou preencha largura e comprimento.
+            }
+          </p>
+        </div>
+      </div>
+
+      @if (erroDeTamanho; as mensagem) {
+        <p class="campo__erro" role="alert">{{ mensagem }}</p>
+      }
+
+      <p class="campo__dica">
+        Com largura e comprimento preenchidos, o sistema gera o polígono do lote
+        (EPSG:31982) e recusa o cadastro se ele intersectar outro imóvel.
+      </p>
+
+      <div class="campo campo--checkbox">
+        <label for="ativo">
+          <input id="ativo" type="checkbox" formControlName="ativo" />
+          Imóvel ativo
+        </label>
+      </div>
+    </section>
+
+    <div class="acoes-do-formulario">
+      <button type="button" class="botao botao--neutro" (click)="cancelar()">Cancelar</button>
+      <button type="submit" class="botao botao--primario" [disabled]="salvando()">
+        {{ salvando() ? 'Salvando…' : 'Salvar' }}
+      </button>
+    </div>
+  </form>
+}

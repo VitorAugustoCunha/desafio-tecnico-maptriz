@@ -1,0 +1,125 @@
+<nav class="trilha" aria-label="Você está aqui">
+  <a routerLink="/proprietarios">Proprietários</a>
+  <span aria-hidden="true">/</span>
+  <span>{{ proprietario()?.nome ?? 'Carregando…' }}</span>
+</nav>
+
+@if (carregando()) {
+  <section class="cartao">
+    <div class="estado" role="status">
+      <span class="carregando" aria-hidden="true"></span>
+      <p>Carregando proprietário…</p>
+    </div>
+  </section>
+} @else if (erro(); as falha) {
+  <section class="cartao">
+    <div class="estado estado--erro" role="alert">
+      <p><strong>Não foi possível carregar o proprietário.</strong></p>
+      <p>{{ falha.mensagem }}</p>
+      <a class="botao botao--neutro" routerLink="/proprietarios">Voltar</a>
+    </div>
+  </section>
+} @else if (proprietario(); as titular) {
+  <section class="cartao">
+    @if (editandoNome()) {
+      <form class="edicao-de-nome" (ngSubmit)="salvarNome()" novalidate>
+        <div class="campo">
+          <label for="nome-proprietario">Nome do proprietário</label>
+          <input
+            id="nome-proprietario"
+            type="text"
+            [formControl]="nome"
+            [attr.aria-invalid]="erroDoNome !== null"
+            aria-describedby="erro-nome-proprietario"
+          />
+          <p class="campo__erro" id="erro-nome-proprietario">{{ erroDoNome }}</p>
+        </div>
+
+        <div class="edicao-de-nome__acoes">
+          <button type="button" class="botao botao--neutro" (click)="cancelarEdicao()">Cancelar</button>
+          <button type="submit" class="botao botao--primario" [disabled]="salvandoNome()">
+            {{ salvandoNome() ? 'Salvando…' : 'Salvar nome' }}
+          </button>
+        </div>
+
+        <p class="campo__dica">
+          A alteração vale para os {{ titular.quantidadeImoveis }} imóvel(is) deste titular.
+        </p>
+      </form>
+    } @else {
+      <div class="titulo-do-titular">
+        <div>
+          <h1>{{ titular.nome }}</h1>
+          <p class="cabecalho__subtitulo">
+            {{ titular.quantidadeImoveis }} imóvel(is) cadastrado(s)
+          </p>
+        </div>
+        <button type="button" class="botao botao--neutro" (click)="comecarEdicao()">Renomear</button>
+      </div>
+    }
+  </section>
+
+  <section class="cartao">
+    <h2 class="cartao__titulo">Imóveis deste proprietário</h2>
+
+    @if (carregandoImoveis()) {
+      <div class="estado" role="status">
+        <span class="carregando" aria-hidden="true"></span>
+        <p>Carregando imóveis…</p>
+      </div>
+    } @else if (imoveis().conteudo.length === 0) {
+      <div class="estado">
+        <p>Este proprietário ainda não tem imóveis cadastrados.</p>
+      </div>
+    } @else {
+      <div class="tabela-rolagem">
+        <table class="tabela">
+          <caption class="visualmente-oculto">Imóveis do proprietário</caption>
+          <thead>
+            <tr>
+              <th scope="col">Endereço</th>
+              <th scope="col">Município</th>
+              <th scope="col">UF</th>
+              <th scope="col" class="numerico">Área (m²)</th>
+              <th scope="col">Situação</th>
+              <th scope="col"><span class="visualmente-oculto">Ações</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (imovel of imoveis().conteudo; track imovel.id) {
+              <tr>
+                <td>{{ imovel.rua }}, {{ imovel.numero }} — {{ imovel.bairro }}</td>
+                <td>{{ imovel.municipio }}</td>
+                <td>{{ imovel.uf }}</td>
+                <td class="numerico">{{ imovel.areaM2 | number: '1.2-2' }}</td>
+                <td>
+                  <span class="etiqueta" [class.etiqueta--inativo]="!imovel.ativo">
+                    {{ imovel.ativo ? 'Ativo' : 'Inativo' }}
+                  </span>
+                </td>
+                <td>
+                  <a
+                    class="botao botao--pequeno botao--neutro"
+                    [routerLink]="['/imoveis', imovel.id, 'editar']"
+                    >Editar</a
+                  >
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-paginacao
+        [pagina]="imoveis().pagina"
+        [tamanho]="imoveis().tamanho"
+        [total]="imoveis().totalDeElementos"
+        [totalDePaginas]="imoveis().totalDePaginas"
+        [primeira]="imoveis().primeira"
+        [ultima]="imoveis().ultima"
+        (irPara)="irParaPagina($event)"
+        (trocarTamanho)="trocarTamanho($event)"
+      />
+    }
+  </section>
+}

@@ -1,0 +1,47 @@
+.cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+}
+
+.cabecalho__subtitulo {
+  margin: 0.25rem 0 0;
+  color: var(--texto-suave);
+  font-size: 0.9375rem;
+}
+
+.cabecalho__acoes {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.filtros__limpar {
+  justify-self: start;
+}
+
+.resumo {
+  margin: 0 0 1rem;
+  color: var(--texto-suave);
+  font-size: 0.875rem;
+}
+
+.acoes {
+  display: flex;
+  gap: 0.5rem;
+  white-space: nowrap;
+}

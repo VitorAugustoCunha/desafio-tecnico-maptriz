@@ -1,7 +1,25 @@
-<div class="topo">
-  <h1>{{ titulo }}</h1>
-</div>
+<!-- Primeiro elemento focavel da pagina: quem navega por teclado pula o menu. -->
+<a class="pular-para-conteudo" href="#conteudo">Pular para o conteúdo</a>
 
-<div class="conteudo">
+<header class="topo">
+  <div class="topo__interno">
+    <a class="topo__marca" routerLink="/imoveis">
+      <span class="topo__logo" aria-hidden="true">◈</span>
+      <span>{{ titulo }}</span>
+    </a>
+
+    <nav class="topo__navegacao" aria-label="Navegação principal">
+      <a routerLink="/imoveis" routerLinkActive="ativo" [routerLinkActiveOptions]="{ exact: true }">
+        Imóveis
+      </a>
+      <a routerLink="/proprietarios" routerLinkActive="ativo">Proprietários</a>
+      <a routerLink="/mapa" routerLinkActive="ativo">Mapa</a>
+    </nav>
+  </div>
+</header>
+
+<main id="conteudo" class="conteudo" tabindex="-1">
   <router-outlet />
-</div>
+</main>
+
+<app-notificacoes />

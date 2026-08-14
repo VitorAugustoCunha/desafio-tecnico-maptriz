@@ -1,0 +1,87 @@
+<header class="cabecalho">
+  <div>
+    <h1>Proprietários</h1>
+    <p class="cabecalho__subtitulo">
+      Titulares do cadastro. Renomear aqui vale para todos os imóveis da pessoa.
+    </p>
+  </div>
+</header>
+
+<section class="cartao">
+  <div class="campo">
+    <label for="busca-proprietario">Buscar proprietário</label>
+    <input
+      id="busca-proprietario"
+      type="search"
+      [formControl]="busca"
+      placeholder="Nome do proprietário"
+      autocomplete="off"
+    />
+  </div>
+</section>
+
+<section class="cartao">
+  @if (carregando()) {
+    <div class="estado" role="status">
+      <span class="carregando" aria-hidden="true"></span>
+      <p>Carregando proprietários…</p>
+    </div>
+  } @else if (erro(); as falha) {
+    <div class="estado estado--erro" role="alert">
+      <p><strong>Não foi possível carregar os proprietários.</strong></p>
+      <p>{{ falha.mensagem }}</p>
+      <button type="button" class="botao botao--neutro" (click)="carregar()">Tentar novamente</button>
+    </div>
+  } @else if (pagina().conteudo.length === 0) {
+    <div class="estado">
+      @if (temBusca) {
+        <p>Nenhum proprietário corresponde à busca.</p>
+      } @else {
+        <p>Nenhum proprietário cadastrado. Eles são criados junto com o primeiro imóvel.</p>
+      }
+    </div>
+  } @else {
+    <div class="tabela-rolagem">
+      <table class="tabela">
+        <caption class="visualmente-oculto">Lista de proprietários e quantidade de imóveis</caption>
+        <thead>
+          <tr>
+            <th scope="col">Nome</th>
+            <th scope="col" class="numerico">Imóveis</th>
+            <th scope="col"><span class="visualmente-oculto">Ações</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (proprietario of pagina().conteudo; track proprietario.id) {
+            <tr>
+              <td>
+                <a [routerLink]="['/proprietarios', proprietario.id]">{{ proprietario.nome }}</a>
+              </td>
+              <td class="numerico">{{ proprietario.quantidadeImoveis }}</td>
+              <td>
+                <a
+                  class="botao botao--pequeno botao--neutro"
+                  [routerLink]="['/proprietarios', proprietario.id]"
+                  [attr.aria-label]="'Ver imóveis de ' + proprietario.nome"
+                >
+                  Ver imóveis
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <app-paginacao
+      [pagina]="pagina().pagina"
+      [tamanho]="pagina().tamanho"
+      [total]="pagina().totalDeElementos"
+      [totalDePaginas]="pagina().totalDePaginas"
+      [primeira]="pagina().primeira"
+      [ultima]="pagina().ultima"
+      (irPara)="irParaPagina($event)"
+      (trocarTamanho)="trocarTamanho($event)"
+    />
+  }
+</section>

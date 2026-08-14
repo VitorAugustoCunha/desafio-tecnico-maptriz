@@ -1,0 +1,163 @@
+<header class="cabecalho">
+  <div>
+    <h1>Imóveis</h1>
+    <p class="cabecalho__subtitulo">Cadastro georreferenciado de imóveis</p>
+  </div>
+
+  <div class="cabecalho__acoes">
+    <button type="button" class="botao botao--neutro" (click)="atualizar()" [disabled]="carregando()">
+      Atualizar
+    </button>
+    <a class="botao botao--primario" routerLink="/imoveis/novo">Novo imóvel</a>
+  </div>
+</header>
+
+<section class="cartao" [formGroup]="filtros">
+  <h2 class="cartao__titulo">Filtros</h2>
+
+  <div class="filtros">
+    <div class="campo">
+      <label for="filtro-proprietario">Proprietário</label>
+      <input
+        id="filtro-proprietario"
+        type="search"
+        formControlName="proprietarioNome"
+        placeholder="Buscar por nome"
+        autocomplete="off"
+      />
+    </div>
+
+    <div class="campo">
+      <label for="filtro-municipio">Município</label>
+      <input
+        id="filtro-municipio"
+        type="search"
+        formControlName="municipio"
+        placeholder="Buscar por município"
+        autocomplete="off"
+      />
+    </div>
+
+    @if (temFiltroAplicado()) {
+      <button type="button" class="botao botao--neutro filtros__limpar" (click)="limparFiltros()">
+        Limpar filtros
+      </button>
+    }
+  </div>
+</section>
+
+<section class="cartao">
+  <p class="resumo" aria-live="polite">
+    {{ total() }} imóvel(is) encontrado(s) — área total desta página:
+    {{ areaTotal() | number: '1.2-2' }} m²
+  </p>
+
+  @if (carregando()) {
+    <div class="estado" role="status">
+      <span class="carregando" aria-hidden="true"></span>
+      <p>Carregando imóveis…</p>
+    </div>
+  } @else if (erro(); as falha) {
+    <div class="estado estado--erro" role="alert">
+      <p><strong>Não foi possível carregar a listagem.</strong></p>
+      <p>{{ falha.mensagem }}</p>
+      <button type="button" class="botao botao--neutro" (click)="atualizar()">Tentar novamente</button>
+    </div>
+  } @else if (vazio()) {
+    <div class="estado">
+      @if (temFiltroAplicado()) {
+        <p>Nenhum imóvel corresponde aos filtros aplicados.</p>
+        <button type="button" class="botao botao--neutro" (click)="limparFiltros()">Limpar filtros</button>
+      } @else {
+        <p>Nenhum imóvel cadastrado ainda.</p>
+        <a class="botao botao--primario" routerLink="/imoveis/novo">Cadastrar o primeiro imóvel</a>
+      }
+    </div>
+  } @else {
+    <div class="tabela-rolagem">
+      <table class="tabela">
+        <caption class="visualmente-oculto">
+          Lista de imóveis cadastrados, ordenável pelas colunas Proprietário, Município e Área
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col" [attr.aria-sort]="direcaoDaColuna('proprietario')">
+              <button type="button" class="tabela__ordenar" (click)="ordenarPor('proprietario')">
+                Proprietário
+              </button>
+            </th>
+            <th scope="col">Endereço</th>
+            <th scope="col" [attr.aria-sort]="direcaoDaColuna('municipio')">
+              <button type="button" class="tabela__ordenar" (click)="ordenarPor('municipio')">
+                Município
+              </button>
+            </th>
+            <th scope="col">UF</th>
+            <th scope="col" class="numerico" [attr.aria-sort]="direcaoDaColuna('area')">
+              <button type="button" class="tabela__ordenar" (click)="ordenarPor('area')">Área (m²)</button>
+            </th>
+            <th scope="col">Situação</th>
+            <th scope="col"><span class="visualmente-oculto">Ações</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- track pelo id: sem ele o Angular recria toda a linha a cada atualizacao da lista -->
+          @for (imovel of itens(); track imovel.id) {
+            <tr>
+              <td>
+                <a [routerLink]="['/proprietarios', imovel.proprietarioId]">{{ imovel.proprietarioNome }}</a>
+              </td>
+              <td>{{ imovel.rua }}, {{ imovel.numero }} — {{ imovel.bairro }}</td>
+              <td>{{ imovel.municipio }}</td>
+              <td>{{ imovel.uf }}</td>
+              <td class="numerico">{{ imovel.areaM2 | number: '1.2-2' }}</td>
+              <td>
+                <span class="etiqueta" [class.etiqueta--inativo]="!imovel.ativo">
+                  {{ imovel.ativo ? 'Ativo' : 'Inativo' }}
+                </span>
+              </td>
+              <td class="acoes">
+                <a
+                  class="botao botao--pequeno botao--neutro"
+                  [routerLink]="['/imoveis', imovel.id, 'editar']"
+                  [queryParams]="paramsDaConsulta()"
+                  [attr.aria-label]="'Editar imóvel de ' + imovel.proprietarioNome"
+                >
+                  Editar
+                </a>
+                <button
+                  type="button"
+                  class="botao botao--pequeno botao--perigo"
+                  (click)="pedirExclusao(imovel)"
+                  [attr.aria-label]="'Excluir imóvel de ' + imovel.proprietarioNome"
+                >
+                  Excluir
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <app-paginacao
+      [pagina]="consulta().pagina"
+      [tamanho]="consulta().tamanho"
+      [total]="total()"
+      [totalDePaginas]="totalDePaginas()"
+      [primeira]="primeira()"
+      [ultima]="ultima()"
+      (irPara)="irParaPagina($event)"
+      (trocarTamanho)="trocarTamanho($event)"
+    />
+  }
+</section>
+
+<app-confirmacao
+  [aberto]="paraExcluir() !== null"
+  titulo="Excluir imóvel"
+  [mensagem]="mensagemDeExclusao()"
+  rotuloConfirmar="Excluir"
+  (confirmar)="confirmarExclusao()"
+  (cancelar)="cancelarExclusao()"
+/>

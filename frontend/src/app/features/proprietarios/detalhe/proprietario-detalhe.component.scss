@@ -1,0 +1,39 @@
+.trilha {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: var(--texto-suave);
+}
+
+.titulo-do-titular {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+}
+
+.cabecalho__subtitulo {
+  margin: 0.25rem 0 0;
+  color: var(--texto-suave);
+  font-size: 0.9375rem;
+}
+
+.edicao-de-nome {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 32rem;
+}
+
+.edicao-de-nome__acoes {
+  display: flex;
+  gap: 0.75rem;
+}

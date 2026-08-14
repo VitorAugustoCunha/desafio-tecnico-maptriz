@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Um push novo cancela a execucao anterior da mesma branch: nao adianta gastar
+# runner terminando o build de um commit que ja foi substituido.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (testes + cobertura)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          # Cache do Maven pela chave do pom.xml: seguro porque so reaproveita
+          # quando as dependencias declaradas sao as mesmas.
+          cache: maven
+
+      # Os testes de integracao sobem PostGIS via Testcontainers, que usa o
+      # Docker ja disponivel no runner do GitHub. Nao ha servico a declarar.
+      - name: Testes e cobertura
+        working-directory: backend
+        run: ./mvnw -B verify
+
+      - name: Publicar relatorio do JaCoCo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-backend
+          path: backend/target/site/jacoco/
+          retention-days: 7
+
+      - name: Publicar resultados dos testes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          retention-days: 7
+
+  frontend:
+    name: Frontend (testes + build de producao)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` e nao `npm install`: instala exatamente o lockfile e falha se
+      # ele estiver dessincronizado do package.json.
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Verificacao de tipos
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Testes
+        working-directory: frontend
+        # `--no-watch`: em CI o runner nao pode ficar esperando alteracao.
+        run: npm run test:ci
+
+      - name: Build de producao
+        working-directory: frontend
+        run: npm run build
+
+  docker:
+    name: Imagens e Compose
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Validar o compose
+        run: docker compose config --quiet
+        env:
+          POSTGRES_PASSWORD: validacao-do-ci
+
+      - name: Build da imagem do backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: webgis-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build da imagem do frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: webgis-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Sobe a stack inteira e confere que ela responde de verdade — build que
+      # compila mas nao sobe nao prova nada.
+      - name: Subir a stack e verificar
+        env:
+          POSTGRES_PASSWORD: validacao-do-ci
+        run: |
+          docker compose up -d --wait --wait-timeout 180
+
+          echo "--- SPA servida pelo Nginx ---"
+          curl -fsS http://localhost:8080/ > /dev/null
+
+          echo "--- API pelo proxy /api ---"
+          curl -fsS "http://localhost:8080/api/imoveis?tamanho=3" | head -c 200
+          echo
+
+          echo "--- seed migrado para a entidade proprietario ---"
+          test "$(curl -fsS 'http://localhost:8080/api/proprietarios?tamanho=1' | grep -o '"totalDeElementos":[0-9]*' | cut -d: -f2)" = "12"
+
+          echo "--- 404 em recurso inexistente ---"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/imoveis/999999)" = "404"
+
+          echo "--- 400 em id nao numerico (era injecao de SQL) ---"
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8080/api/imoveis/0%20or%201=1')" = "400"
+
+          echo "OK"
+
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose logs --tail 200
+
+      - name: Derrubar a stack
+        if: always()
+        run: docker compose down -v

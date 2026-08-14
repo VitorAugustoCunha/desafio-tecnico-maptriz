@@ -1,0 +1,78 @@
+# Sobe o sistema completo:  docker compose up --build
+#
+# Portas publicadas: apenas a do frontend (8080). O backend e o banco so existem
+# na rede interna — o banco nao fica exposto por padrao.
+
+name: webgis
+
+services:
+  banco:
+    # PostGIS, nao Postgres puro: as migrations criam a extensao e a geometria.
+    # Versao fixa para o ambiente ser reproduzivel.
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-webgis}
+      POSTGRES_USER: ${POSTGRES_USER:-webgis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - dados-do-banco:/var/lib/postgresql/data
+    networks:
+      - interna
+    healthcheck:
+      # O `-h 127.0.0.1` NAO e decorativo: sem ele o pg_isready conecta pelo
+      # socket Unix. Durante o initdb, a imagem sobe um servidor temporario que
+      # escuta SO no socket, para rodar os scripts de inicializacao — e nesse
+      # intervalo o pg_isready ja responde "pronto" enquanto a porta TCP ainda
+      # esta fechada. O backend entao subia, levava "connection refused" do
+      # Flyway e so funcionava depois do restart automatico. Forcando TCP, o
+      # healthcheck passa a refletir o que o backend realmente precisa.
+      test:
+        ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER:-webgis} -d ${POSTGRES_DB:-webgis}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      WEBGIS_DB_URL: jdbc:postgresql://banco:5432/${POSTGRES_DB:-webgis}
+      WEBGIS_DB_USER: ${POSTGRES_USER:-webgis}
+      WEBGIS_DB_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      WEBGIS_LOG_LEVEL: ${WEBGIS_LOG_LEVEL:-INFO}
+      # Vazio de proposito: o Nginx faz proxy de /api, entao tudo fica na mesma
+      # origem e CORS nao e necessario.
+      WEBGIS_CORS_ORIGINS: ${WEBGIS_CORS_ORIGINS:-}
+      WEBGIS_GIS_POOL_NUCLEO: ${WEBGIS_GIS_POOL_NUCLEO:-2}
+      WEBGIS_GIS_POOL_MAXIMO: ${WEBGIS_GIS_POOL_MAXIMO:-4}
+      WEBGIS_GIS_POOL_FILA: ${WEBGIS_GIS_POOL_FILA:-8}
+    depends_on:
+      banco:
+        # Espera o banco estar saudavel de verdade, nao apenas iniciado: sem
+        # isso o Flyway tenta migrar contra um banco que ainda nao aceita
+        # conexao e a aplicacao morre no boot.
+        condition: service_healthy
+    networks:
+      - interna
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - '${WEBGIS_PORTA:-8080}:8080'
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - interna
+    restart: unless-stopped
+
+networks:
+  interna:
+    driver: bridge
+
+volumes:
+  dados-do-banco:

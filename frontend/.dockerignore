@@ -1,0 +1,10 @@
+# node_modules fica de fora: a imagem roda `npm ci` a partir do lockfile, e
+# copiar a pasta local traria binarios compilados para outro sistema.
+node_modules/
+dist/
+.angular/
+.vscode/
+*.log
+.env
+Dockerfile
+.dockerignore

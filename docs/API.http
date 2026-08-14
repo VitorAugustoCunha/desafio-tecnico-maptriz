@@ -1,0 +1,245 @@
+### Coleção HTTP do WebGIS
+#
+# Abra no VS Code (extensão REST Client) ou no IntelliJ e clique em "Send".
+# O equivalente em `curl` está comentado abaixo de cada bloco.
+#
+# Sistema no ar:  docker compose up --build
+
+@host = http://localhost:8080
+@api = {{host}}/api
+
+### ---------------------------------------------------------------------------
+### IMÓVEIS
+### ---------------------------------------------------------------------------
+
+### Listagem paginada (padrão: 20 por página)
+GET {{api}}/imoveis
+# curl -s "http://localhost:8080/api/imoveis?tamanho=5" | jq
+
+### Filtro por município (parcial, sem diferenciar maiúsculas)
+GET {{api}}/imoveis?municipio=curitiba
+# curl -s "http://localhost:8080/api/imoveis?municipio=curitiba" | jq
+
+### Filtro por proprietário + paginação + ordenação
+GET {{api}}/imoveis?proprietarioNome=maria&pagina=0&tamanho=10&ordenarPor=area&direcao=desc
+# curl -s "http://localhost:8080/api/imoveis?proprietarioNome=maria&ordenarPor=area&direcao=desc" | jq
+
+### O tamanho de página é limitado pelo servidor (devolve 100, não 999999)
+GET {{api}}/imoveis?tamanho=999999
+# curl -s "http://localhost:8080/api/imoveis?tamanho=999999" | jq '.tamanho'
+
+### Ordenação fora da whitelist → 400
+GET {{api}}/imoveis?ordenarPor=senha
+# curl -i -s "http://localhost:8080/api/imoveis?ordenarPor=senha"
+
+### Buscar por id
+GET {{api}}/imoveis/1
+
+### Id inexistente → 404 com ProblemDetail (no baseline: 200 com corpo vazio)
+GET {{api}}/imoveis/999999
+# curl -i -s http://localhost:8080/api/imoveis/999999
+
+### Id não numérico → 400 (no baseline: injeção de SQL, devolvia um imóvel)
+GET {{api}}/imoveis/0%20or%201=1
+# curl -i -s "http://localhost:8080/api/imoveis/0%20or%201=1"
+
+### Criar imóvel simples (só ponto) → 201 + Location
+POST {{api}}/imoveis
+Content-Type: application/json
+
+{
+  "proprietarioNome": "Maria Aparecida Souza",
+  "municipio": "São Paulo",
+  "uf": "SP",
+  "bairro": "Pinheiros",
+  "rua": "Rua dos Pinheiros",
+  "numero": "1245",
+  "latitude": -23.5629,
+  "longitude": -46.6944,
+  "areaM2": 320.50,
+  "ativo": true
+}
+
+# curl -i -s -X POST http://localhost:8080/api/imoveis \
+#   -H 'Content-Type: application/json' \
+#   -d '{"proprietarioNome":"Maria Aparecida Souza","municipio":"São Paulo","uf":"SP",
+#        "bairro":"Pinheiros","rua":"Rua dos Pinheiros","numero":"1245",
+#        "latitude":-23.5629,"longitude":-46.6944,"areaM2":320.50,"ativo":true}'
+
+### Criar imóvel COM GEOMETRIA (tarefa 8): gera POLYGON em EPSG:31982
+POST {{api}}/imoveis
+Content-Type: application/json
+
+{
+  "proprietarioNome": "Roberto Antunes Melo",
+  "municipio": "Curitiba",
+  "uf": "PR",
+  "bairro": "Batel",
+  "rua": "Avenida do Batel",
+  "numero": "1560",
+  "latitude": -25.4420,
+  "longitude": -49.2920,
+  "larguraM": 20,
+  "comprimentoM": 50,
+  "ativo": true
+}
+
+# A resposta traz "possuiGeometria": true e areaM2 = 1000.00 (20 × 50),
+# calculada pelo servidor a partir das dimensões.
+
+### O MESMO lugar de novo → 409 com o id do imóvel conflitante
+POST {{api}}/imoveis
+Content-Type: application/json
+
+{
+  "proprietarioNome": "Outra Pessoa",
+  "municipio": "Curitiba",
+  "uf": "PR",
+  "bairro": "Batel",
+  "rua": "Avenida do Batel",
+  "numero": "1562",
+  "latitude": -25.4420,
+  "longitude": -49.2920,
+  "larguraM": 30,
+  "comprimentoM": 30,
+  "ativo": true
+}
+
+# Resposta: 409
+# { "type": "urn:webgis:problema:conflito-espacial",
+#   "detail": "A area informada conflita com o imovel N ja cadastrado",
+#   "idImovelConflitante": N }
+
+### Payload inválido → 400 com a lista de erros por campo
+POST {{api}}/imoveis
+Content-Type: application/json
+
+{
+  "proprietarioNome": "",
+  "municipio": "",
+  "uf": "XXXXX",
+  "bairro": "",
+  "rua": "",
+  "numero": "",
+  "latitude": 999,
+  "longitude": -999,
+  "areaM2": -50,
+  "ativo": true
+}
+
+### Corpo que não é objeto JSON → 400 (no baseline: 200 com corpo vazio)
+POST {{api}}/imoveis
+Content-Type: application/json
+
+[1, 2, 3]
+
+### Atualizar → 200 com o recurso atualizado (é o que alimenta o cache do front)
+PUT {{api}}/imoveis/1
+Content-Type: application/json
+
+{
+  "proprietarioNome": "Maria Aparecida Souza",
+  "municipio": "Campinas",
+  "uf": "SP",
+  "bairro": "Centro",
+  "rua": "Rua Treze de Maio",
+  "numero": "100",
+  "latitude": -22.9056,
+  "longitude": -47.0608,
+  "areaM2": 410.00,
+  "ativo": true
+}
+
+### Excluir → 204 sem corpo
+DELETE {{api}}/imoveis/1
+
+### ---------------------------------------------------------------------------
+### PROPRIETÁRIOS (tarefas 4 e 5)
+### ---------------------------------------------------------------------------
+
+### Listagem com a contagem de imóveis agregada
+GET {{api}}/proprietarios
+# curl -s http://localhost:8080/api/proprietarios | jq
+
+### Busca por nome parcial
+GET {{api}}/proprietarios?busca=maria
+
+### Detalhe
+GET {{api}}/proprietarios/1
+
+### Imóveis de um proprietário (paginado — não vem aninhado no detalhe)
+GET {{api}}/imoveis?proprietarioId=1
+
+### RENOMEAR: uma entidade alterada, vale para TODOS os imóveis dele
+PUT {{api}}/proprietarios/1
+Content-Type: application/json
+
+{ "nome": "Maria Aparecida Souza Ferreira" }
+
+# Confira depois com:
+#   curl -s "http://localhost:8080/api/imoveis?proprietarioId=1" | jq '.conteudo[].proprietarioNome'
+
+### Nome duplicado → 409 (mesmo com caixa e espaços diferentes)
+POST {{api}}/proprietarios
+Content-Type: application/json
+
+{ "nome": "  MARIA   Aparecida  SOUZA " }
+
+### Excluir titular que ainda tem imóveis → 409
+DELETE {{api}}/proprietarios/1
+
+### ---------------------------------------------------------------------------
+### MAPA (tarefa 7)
+### ---------------------------------------------------------------------------
+
+### Feições dentro do viewport, em GeoJSON. O bbox é obrigatório.
+GET {{api}}/mapa/imoveis?minLon=-49.4&minLat=-25.6&maxLon=-49.1&maxLat=-25.3&zoom=14
+# curl -s "http://localhost:8080/api/mapa/imoveis?minLon=-49.4&minLat=-25.6&maxLon=-49.1&maxLat=-25.3&zoom=14" | jq '.metadados'
+
+### Zoom afastado → o servidor devolve AGREGADOS calculados no PostGIS
+GET {{api}}/mapa/imoveis?minLon=-60&minLat=-30&maxLon=-40&maxLat=-10&zoom=5
+# Repare em "metadados": { "agregado": true } e em properties.quantidade
+
+### Incluindo imóveis inativos
+GET {{api}}/mapa/imoveis?minLon=-49.4&minLat=-25.6&maxLon=-49.1&maxLat=-25.3&zoom=14&apenasAtivos=false
+
+### Coordenada fora da faixa válida → 400
+GET {{api}}/mapa/imoveis?minLon=-999&minLat=-25.6&maxLon=-49.1&maxLat=-25.3&zoom=14
+
+### ---------------------------------------------------------------------------
+### EXPORTAÇÃO EM LOTE (pool de trabalho GIS)
+### ---------------------------------------------------------------------------
+
+### Solicitar exportação → 202 + Location de acompanhamento
+POST {{api}}/exportacoes/geojson
+Content-Type: application/json
+
+{ "municipio": "Curitiba" }
+
+# curl -i -s -X POST http://localhost:8080/api/exportacoes/geojson \
+#   -H 'Content-Type: application/json' -d '{"municipio":"Curitiba"}'
+
+### Exportar tudo (sem filtro) — processada em lotes, sem carregar na memória
+POST {{api}}/exportacoes/geojson
+Content-Type: application/json
+
+{}
+
+### Acompanhar o status (troque pelo id devolvido acima)
+GET {{api}}/exportacoes/00000000-0000-0000-0000-000000000000
+
+### Baixar o arquivo quando o status for CONCLUIDA
+GET {{api}}/exportacoes/00000000-0000-0000-0000-000000000000/arquivo
+
+### Cancelar (o worker interrompe entre um lote e outro)
+DELETE {{api}}/exportacoes/00000000-0000-0000-0000-000000000000
+
+# Com o pool saturado, o POST devolve 503 + Retry-After — é o backpressure.
+
+### ---------------------------------------------------------------------------
+### OPERAÇÃO
+### ---------------------------------------------------------------------------
+
+### Health (readiness usado pelo healthcheck do container)
+GET {{host}}/actuator/health/readiness
+# Sem detalhes de infraestrutura: show-details=when-authorized

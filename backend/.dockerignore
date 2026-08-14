@@ -1,0 +1,9 @@
+# Nao entra no contexto de build: reduz o envio ao daemon e evita invalidar
+# camadas de cache por causa de arquivo local.
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.iml
+.idea/
+.vscode/
+*.log
+.env

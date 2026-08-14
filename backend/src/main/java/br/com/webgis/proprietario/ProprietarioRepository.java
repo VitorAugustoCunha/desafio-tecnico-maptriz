@@ -19,20 +19,27 @@ public interface ProprietarioRepository extends JpaRepository<Proprietario, Long
 	/**
 	 * Listagem com a contagem de imoveis de cada titular.
 	 *
-	 * <p>A contagem sai agregada na mesma consulta. Buscar os proprietarios e
-	 * depois contar os imoveis de cada um seria o classico N+1 — 1 consulta para a
-	 * pagina, mais uma por linha.
+	 * <p>A contagem vem por <b>subconsulta correlacionada</b>, e nao por
+	 * {@code LEFT JOIN ... GROUP BY}. A diferenca e grande em volume: com o
+	 * {@code GROUP BY} sobre a juncao, o banco precisa varrer e agrupar a tabela
+	 * inteira de imoveis para depois devolver as 20 linhas da pagina. Medido com
+	 * 500 mil imoveis, esse formato levava ~573 ms (p50); com a subconsulta,
+	 * apenas os 20 titulares da pagina sao contados, cada um por
+	 * {@code idx_imovel_proprietario_id}. Os numeros estao em docs/PERFORMANCE.md.
+	 *
+	 * <p>Continua sendo uma unica ida ao banco — nao e N+1: o N+1 seria a
+	 * aplicacao emitir uma consulta por linha, em ida e volta pela rede.
 	 *
 	 * <p>O filtro chega sempre como padrao LIKE ({@code '%%'} quando nao ha busca),
 	 * o que evita parametro nulo dentro da consulta e mantem um unico plano.
 	 */
 	@Query(value = """
 			SELECT new br.com.webgis.proprietario.dto.ProprietarioListItem(
-			           p.id, p.nome, COUNT(i.id))
+			           p.id,
+			           p.nome,
+			           (SELECT COUNT(i.id) FROM Imovel i WHERE i.proprietario = p))
 			  FROM Proprietario p
-			  LEFT JOIN Imovel i ON i.proprietario = p
 			 WHERE LOWER(p.nome) LIKE :padraoNome
-			 GROUP BY p.id, p.nome
 			""",
 			countQuery = """
 			SELECT COUNT(p)

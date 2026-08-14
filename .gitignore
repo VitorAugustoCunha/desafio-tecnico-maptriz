@@ -1,0 +1,19 @@
+# build output
+backend/target/
+frontend/dist/
+frontend/.angular/
+frontend/node_modules/
+
+# ferramentas / IDE
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# ambiente local
+.env
+*.local
+
+# sistema
+.DS_Store
+Thumbs.db

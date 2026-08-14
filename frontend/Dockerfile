@@ -30,7 +30,10 @@ USER nginx
 
 EXPOSE 8080
 
+# `127.0.0.1` e nao `localhost`: dentro do container, `localhost` resolve para
+# ::1 (IPv6) primeiro, e o Nginx faz bind so em IPv4 — o healthcheck levava
+# "connection refused" enquanto a aplicacao servia normalmente.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget -q --spider http://localhost:8080/ || exit 1
+    CMD wget -q --spider http://127.0.0.1:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

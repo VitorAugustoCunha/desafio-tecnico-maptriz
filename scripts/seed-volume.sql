@@ -40,6 +40,16 @@ ON CONFLICT (nome_normalizado) DO NOTHING;
 
 -- Imoveis espalhados pelo territorio brasileiro, distribuidos entre os
 -- proprietarios e os municipios gerados.
+-- Os titulares sao alcancados por POSICAO (row_number), nao por aritmetica
+-- sobre o id. Somar um deslocamento ao menor id so funcionaria se os ids fossem
+-- contiguos — qualquer exclusao anterior abre uma lacuna e o INSERT passa a
+-- violar a foreign key.
+WITH titulares AS (
+    SELECT id, (row_number() OVER (ORDER BY id)) - 1 AS posicao FROM proprietario
+),
+quantidade AS (
+    SELECT count(*) AS total FROM titulares
+)
 INSERT INTO imovel (
     proprietario_id, municipio, uf, bairro, rua, numero,
     latitude, longitude, area_m2, ativo, criado_em, atualizado_em
@@ -47,8 +57,7 @@ INSERT INTO imovel (
 SELECT
     -- Distribuicao desigual de proposito: alguns titulares com muitos imoveis,
     -- que e como o cadastro real se comporta.
-    (SELECT id FROM proprietario ORDER BY id LIMIT 1)
-        + (g::bigint * 7919) % :proprietarios,
+    t.id,
     'Municipio ' || to_char((g::bigint * 104729) % :municipios, 'FM0000'),
     (ARRAY['SP','RJ','MG','PR','RS','SC','BA','PE','CE','GO'])[1 + (g % 10)],
     'Bairro ' || (1 + (g % 40)),
@@ -61,7 +70,9 @@ SELECT
     (g % 25) <> 0,
     now() - ((g % 3650) || ' days')::interval,
     now() - ((g % 3650) || ' days')::interval
-FROM generate_series(1, :imoveis) AS g;
+FROM generate_series(1, :imoveis) AS g
+CROSS JOIN quantidade q
+JOIN titulares t ON t.posicao = (g::bigint * 7919) % q.total;
 
 -- O planejador precisa de estatisticas atualizadas; sem isto a primeira medicao
 -- mede o otimizador desinformado, nao o indice.

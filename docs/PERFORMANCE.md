@@ -203,6 +203,42 @@ Se o volume crescer uma ordem de grandeza, a saída é paginação por keyset
 (`MapaRepository.loteParaExportacao`) — lá não há UI de páginas e o keyset é a
 escolha certa. O trade-off está registrado em `docs/DECISIONS.md`, ADR-003.
 
+## Resultado 5 — backpressure do pool GIS, na stack real
+
+Com 300.017 imóveis carregados (para que cada exportação realmente ocupe uma
+thread), 30 solicitações de exportação disparadas em sequência contra o pool
+configurado com `núcleo=2, máximo=4, fila=8`:
+
+| Resposta | Quantidade |
+|----------|-----------:|
+| `202 Accepted` | **12** |
+| `503 Service Unavailable` | **18** |
+
+**12 = 4 threads + 8 posições de fila** — exatamente a capacidade configurada.
+A partir daí o servidor recusa de forma controlada:
+
+```json
+{
+  "type": "urn:webgis:problema:capacidade-excedida",
+  "title": "Servico temporariamente indisponivel",
+  "status": 503,
+  "detail": "Nao ha capacidade para novas exportacoes no momento. Tente novamente em instantes.",
+  "segundosParaNovaTentativa": 30
+}
+```
+
+com `Retry-After: 30` no header.
+
+**O ponto do isolamento:** durante a saturação, `GET /api/imoveis` continuou
+respondendo `200` normalmente. É exatamente o que o pool dedicado existe para
+garantir — exportações pesadas não consomem as threads que atendem o cadastro.
+Rodando no pool do Tomcat, essas 12 exportações simultâneas teriam degradado a
+aplicação inteira.
+
+A saturação também é coberta por teste determinístico (`ExportacaoWorkerTest`,
+com `CountDownLatch` em vez de `sleep`), porque depender de carga real para
+provar backpressure daria um teste lento e instável.
+
 ## Frontend
 
 | Métrica | Valor |

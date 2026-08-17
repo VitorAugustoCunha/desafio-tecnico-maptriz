@@ -17,6 +17,7 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import { Attribution, defaults as controlesPadrao } from 'ol/control';
 import { Draw, Modify, Snap } from 'ol/interaction';
+import { containsExtent, getHeight, getWidth } from 'ol/extent';
 import { Point, Polygon } from 'ol/geom';
 import TileLayer from 'ol/layer/Tile';
 import { Vector as CamadaVetorial } from 'ol/layer';
@@ -35,6 +36,33 @@ export type ModoDeDesenho = 'dimensoes' | 'desenho';
 const CENTRO_PADRAO: Posicao = [-51.9, -14.2];
 const ZOOM_PADRAO = 4;
 const ZOOM_AO_ESCOLHER = 17;
+
+/** Teto ao enquadrar o lote: além disso as imagens de satélite acabam. */
+const ZOOM_MAXIMO_AO_ENQUADRAR = 20;
+
+/** Folga, em pixels, entre o lote enquadrado e a borda do mapa. */
+const FOLGA_AO_ENQUADRAR: [number, number, number, number] = [48, 48, 48, 48];
+
+/**
+ * Menor lado aceitável do lote na tela, em pixels.
+ *
+ * <p>Abaixo disto o retângulo não é um contorno, é um borrão escondido sob o
+ * marcador do centro — que foi exatamente o sintoma de "o ponto aparece, o
+ * contorno não".
+ */
+const LADO_MINIMO_EM_PIXELS = 48;
+
+/**
+ * Quanto o ponteiro pode andar entre apertar e soltar e o gesto ainda contar
+ * como clique, em pixels.
+ *
+ * <p>O OpenLayers usa 6 px por padrao. Acima disso ele entende o gesto como
+ * arrasto do mapa e <b>descarta o vertice em silencio</b> — no touchpad, e o
+ * suficiente para o clique "nao funcionar" de vez em quando sem nenhum aviso.
+ * Marcar o canto de um lote nao exige precisao de 6 px; 12 px cobre a mao
+ * tremida sem atrapalhar quem quer mesmo arrastar o mapa.
+ */
+const TOLERANCIA_DE_CLIQUE = 12;
 
 /**
  * Mapa de edição do lote.
@@ -167,9 +195,14 @@ const ZOOM_AO_ESCOLHER = 17;
       font-size: 0.8125rem;
     }
 
+    /*
+      Altura elastica: contornar um lote sobre imagem aerea exige area de tela.
+      O minimo garante um mapa utilizavel em janela baixa; o maximo impede que
+      o mapa empurre os botoes do formulario para fora da tela em monitor alto.
+    */
     .editor__mapa {
       width: 100%;
-      height: 22rem;
+      height: clamp(26rem, 62vh, 46rem);
     }
 
     .editor__ajuda {
@@ -247,7 +280,9 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.observador?.disconnect();
     this.observador = null;
+    this.desligarDesenho();
     this.mapa?.setTarget(undefined);
+    this.mapa?.dispose();
     this.mapa = null;
   }
 
@@ -290,6 +325,8 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
       // e o servidor recusa as duas juntas.
       this.poligonoAlterado.emit(null);
       this.ligarDesenho();
+      // Traçar vértice a vértice só faz sentido perto do chão.
+      this.aproximarDoPonto();
     } else {
       this.desligarDesenho();
       this.poligonoAlterado.emit(null);
@@ -352,6 +389,9 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
     setTimeout(() => {
       this.mapa?.updateSize();
       this.mapa?.renderSync();
+      // Com altura 0 não dá para calcular enquadramento; agora que o mapa tem
+      // tamanho, refaz o que ficou pendente.
+      this.enquadrarConteudo();
     });
   }
 
@@ -388,16 +428,106 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
       const ponto = new Feature(new Point(fromLonLat([longitude, latitude])));
       ponto.set('tipo', 'ponto');
       this.fonte.addFeature(ponto);
+      this.aproximarDoPonto();
       return;
     }
 
-    const poligono = new Feature(new Polygon([anel.map(([lon, lat]) => fromLonLat([lon, lat]))]));
+    const geometria = new Polygon([anel.map(([lon, lat]) => fromLonLat([lon, lat]))]);
+
+    const poligono = new Feature(geometria);
     poligono.set('tipo', 'retangulo');
 
     const centro = new Feature(new Point(fromLonLat([longitude, latitude])));
     centro.set('tipo', 'ponto');
 
     this.fonte.addFeatures([poligono, centro]);
+    this.enquadrarPoligono(geometria);
+  }
+
+  /**
+   * Aproxima o suficiente para o lote virar um contorno visível.
+   *
+   * <p>Sem isto o mapa fica no enquadramento inicial (zoom 4, o Brasil
+   * inteiro), onde um lote de 30 × 50 m mede três milésimos de pixel: só o
+   * marcador do centro aparece, e o retângulo parece nunca ter sido desenhado.
+   *
+   * <p>Só mexe na vista quando precisa — se o lote já está inteiro na tela e
+   * num tamanho legível, reenquadrar atrapalharia quem acabou de ajustar o
+   * mapa a mão.
+   */
+  private enquadrarPoligono(geometria: Polygon): void {
+    const mapa = this.mapa;
+    const tamanho = mapa?.getSize();
+
+    if (mapa === null || tamanho === undefined) {
+      return;
+    }
+
+    const vista = mapa.getView();
+    const resolucao = vista.getResolution();
+    if (resolucao === undefined) {
+      return;
+    }
+
+    const extensao = geometria.getExtent();
+    const cabeNaTela = containsExtent(vista.calculateExtent(tamanho), extensao);
+    const legivel =
+      getWidth(extensao) / resolucao >= LADO_MINIMO_EM_PIXELS &&
+      getHeight(extensao) / resolucao >= LADO_MINIMO_EM_PIXELS;
+
+    if (cabeNaTela && legivel) {
+      return;
+    }
+
+    vista.fit(extensao, {
+      padding: FOLGA_AO_ENQUADRAR,
+      maxZoom: ZOOM_MAXIMO_AO_ENQUADRAR,
+      duration: 250,
+    });
+  }
+
+  /**
+   * Leva a vista até o ponto do imóvel quando ela está longe demais.
+   *
+   * <p>Usado quando ainda não há retângulo para enquadrar: no clique que só
+   * marca o centro, e ao entrar no modo desenho — traçar um lote a partir do
+   * zoom 4 é impossível na prática.
+   */
+  private aproximarDoPonto(): void {
+    const mapa = this.mapa;
+    const latitude = this.latitude();
+    const longitude = this.longitude();
+
+    if (mapa === null || latitude === null || longitude === null) {
+      return;
+    }
+
+    const vista = mapa.getView();
+    if ((vista.getZoom() ?? 0) >= ZOOM_AO_ESCOLHER) {
+      // Já está perto: o ponto recém-clicado está visível, e recentralizar a
+      // cada ajuste fino só faria o mapa pular debaixo do cursor.
+      return;
+    }
+
+    vista.animate({
+      center: fromLonLat([longitude, latitude]),
+      zoom: ZOOM_AO_ESCOLHER,
+      duration: 250,
+    });
+  }
+
+  /** Reenquadra o que estiver desenhado. Usado quando o mapa ganha tamanho. */
+  private enquadrarConteudo(): void {
+    const geometria = this.fonte
+      .getFeatures()
+      .map((feicao) => feicao.getGeometry())
+      .find((g) => g instanceof Polygon);
+
+    if (geometria instanceof Polygon) {
+      this.enquadrarPoligono(geometria);
+    } else {
+      this.aproximarDoPonto();
+    }
   }
 
   private ligarDesenho(): void {
@@ -406,7 +536,11 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.desenho = new Draw({ source: this.fonte, type: 'Polygon' });
+    this.desenho = new Draw({
+      source: this.fonte,
+      type: 'Polygon',
+      clickTolerance: TOLERANCIA_DE_CLIQUE,
+    });
 
     this.desenho.on('drawend', (evento) => {
       const geometria = evento.feature.getGeometry();
@@ -419,13 +553,50 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
 
     mapa.addInteraction(this.desenho);
 
+    this.ligarAjuste();
+  }
+
+  /**
+   * (Re)cria as interações de ajustar vértices.
+   *
+   * <p>Idempotente de propósito: `limparDesenho` e `ligarDesenho` podem ser
+   * chamados com um `Modify`/`Snap` já ativos, e adicionar um segundo par faria
+   * cada arrasto de vértice emitir o polígono duas vezes — e vazar uma
+   * interação por ciclo de desenhar/apagar.
+   */
+  private ligarAjuste(): void {
+    const mapa = this.mapa;
+    if (mapa === null) {
+      return;
+    }
+
+    this.desligarAjuste();
+
     this.modificacao = new Modify({ source: this.fonte });
     this.modificacao.on('modifyend', () => this.emitirDoPrimeiroPoligono());
     mapa.addInteraction(this.modificacao);
 
-    // Encaixe nos próprios vértices, para fechar o anel sem precisar de mira fina.
+    // Encaixe nos próprios vértices, para fechar o anel sem precisar de mira
+    // fina. Tem que ser a última interação: é ela que corrige a coordenada do
+    // evento antes de `Draw` e `Modify` a usarem.
     this.encaixe = new Snap({ source: this.fonte });
     mapa.addInteraction(this.encaixe);
+  }
+
+  private desligarAjuste(): void {
+    const mapa = this.mapa;
+    if (mapa === null) {
+      return;
+    }
+
+    for (const interacao of [this.modificacao, this.encaixe]) {
+      if (interacao !== null) {
+        mapa.removeInteraction(interacao);
+      }
+    }
+
+    this.modificacao = null;
+    this.encaixe = null;
   }
 
   /** Remove só a interação de traçar, mantendo a de ajustar vértices. */
@@ -437,17 +608,8 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private desligarDesenho(): void {
-    if (this.mapa === null) {
-      return;
-    }
-    for (const interacao of [this.desenho, this.modificacao, this.encaixe]) {
-      if (interacao !== null) {
-        this.mapa.removeInteraction(interacao);
-      }
-    }
-    this.desenho = null;
-    this.modificacao = null;
-    this.encaixe = null;
+    this.desligarSomenteDesenho();
+    this.desligarAjuste();
   }
 
   private emitirDoPrimeiroPoligono(): void {
@@ -514,15 +676,14 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
     this.temDesenho.set(true);
     this.areaDesenhada.set(Math.round(areaEmMetrosQuadrados(anel)));
 
-    this.mapa.getView().fit(poligono.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 19 });
+    this.mapa.getView().fit(poligono.getExtent(), {
+      padding: FOLGA_AO_ENQUADRAR,
+      maxZoom: ZOOM_MAXIMO_AO_ENQUADRAR,
+    });
 
     // Só ajuste de vértices: o lote já existe, não há o que traçar.
-    this.modificacao = new Modify({ source: this.fonte });
-    this.modificacao.on('modifyend', () => this.emitirDoPrimeiroPoligono());
-    this.mapa.addInteraction(this.modificacao);
-
-    this.encaixe = new Snap({ source: this.fonte });
-    this.mapa.addInteraction(this.encaixe);
+    this.desligarSomenteDesenho();
+    this.ligarAjuste();
 
     this.aplicandoDoExterior = false;
   }

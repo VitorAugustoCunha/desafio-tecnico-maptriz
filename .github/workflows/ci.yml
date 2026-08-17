@@ -90,6 +90,14 @@ jobs:
     name: Imagens e Compose
     runs-on: ubuntu-latest
 
+    # No nivel do job, e nao de cada step: o compose.yaml declara a senha como
+    # obrigatoria (`${POSTGRES_PASSWORD:?...}`), entao QUALQUER `docker compose`
+    # precisa dela para interpolar o arquivo — inclusive o `down` da limpeza,
+    # que nao sobe nada. Declarar por step deixa a lacuna aberta para o proximo
+    # step que alguem adicionar.
+    env:
+      POSTGRES_PASSWORD: validacao-do-ci
+
     steps:
       - uses: actions/checkout@v4
 
@@ -97,8 +105,6 @@ jobs:
 
       - name: Validar o compose
         run: docker compose config --quiet
-        env:
-          POSTGRES_PASSWORD: validacao-do-ci
 
       - name: Build da imagem do backend
         uses: docker/build-push-action@v6
@@ -123,8 +129,6 @@ jobs:
       # Sobe a stack inteira e confere que ela responde de verdade — build que
       # compila mas nao sobe nao prova nada.
       - name: Subir a stack e verificar
-        env:
-          POSTGRES_PASSWORD: validacao-do-ci
         run: |
           docker compose up -d --wait --wait-timeout 180
 

@@ -17,6 +17,7 @@ RUN npm run build
 FROM nginx:1.27-alpine AS runtime
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY seguranca.conf /etc/nginx/seguranca.conf
 COPY --from=build /build/dist/frontend/browser /usr/share/nginx/html
 
 # Nginx sem root: o processo mestre normalmente sobe como root para abrir a

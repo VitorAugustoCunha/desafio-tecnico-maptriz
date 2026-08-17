@@ -20,15 +20,16 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import { Attribution, defaults as controlesPadrao } from 'ol/control';
 import { Point, Polygon } from 'ol/geom';
-import { Tile as CamadaDeTiles, Vector as CamadaVetorial } from 'ol/layer';
+import { Vector as CamadaVetorial } from 'ol/layer';
 import { fromLonLat, toLonLat } from 'ol/proj';
-import { OSM, Vector as FonteVetorial } from 'ol/source';
+import { Vector as FonteVetorial } from 'ol/source';
 import { Circle, Fill, Stroke, Style, Text } from 'ol/style';
 import { MapBrowserEvent } from 'ol';
 
 import { MapaApiService, Viewport } from '../../core/api/mapa-api.service';
 import { traduzirErro } from '../../core/api/erro-da-api';
 import { ErroDaApi } from '../../core/models/problema.model';
+import { camadaDeRuas } from './gis/camadas-base';
 import { EstatisticasDoLote, PropriedadesDaFeicao } from './gis/gis-protocolo';
 import { GisWorkerClient, ehPedidoObsoleto } from './gis/gis-worker.client';
 
@@ -59,6 +60,7 @@ export class MapaComponent implements AfterViewInit, OnDestroy {
   private readonly elementoDoMapa = viewChild.required<ElementRef<HTMLDivElement>>('mapa');
 
   private mapa: Map | null = null;
+  private observador: ResizeObserver | null = null;
   private readonly fonte = new FonteVetorial();
 
   /** Emite a cada movimento do mapa; o debounce e o switchMap resolvem a corrida. */
@@ -111,6 +113,8 @@ export class MapaComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.observador?.disconnect();
+    this.observador = null;
     this.mapa?.setTarget(undefined);
     this.mapa = null;
   }
@@ -121,15 +125,14 @@ export class MapaComponent implements AfterViewInit, OnDestroy {
       style: (feicao) => this.estiloDa(feicao as Feature),
     });
 
+    const container = this.elementoDoMapa().nativeElement;
+
     this.mapa = new Map({
-      target: this.elementoDoMapa().nativeElement,
+      target: container,
       layers: [
-        new CamadaDeTiles({
-          // Base OpenStreetMap. A fonte OSM do OpenLayers ja injeta a atribuicao
-          // exigida pela licenca ODbL; o controle abaixo a deixa sempre visivel
-          // em vez de escondida atras do botao.
-          source: new OSM(),
-        }),
+        // Ruas por padrao aqui: nesta tela o objetivo e localizar imoveis, nao
+        // digitalizar contorno. O editor do formulario usa satelite.
+        camadaDeRuas(),
         camadaDeFeicoes,
       ],
       view: new View({
@@ -140,6 +143,19 @@ export class MapaComponent implements AfterViewInit, OnDestroy {
       controls: controlesPadrao({ attribution: false }).extend([
         new Attribution({ collapsible: false }),
       ]),
+    });
+
+    // Mesmo motivo do editor: o container pode ter altura 0 quando o mapa e
+    // criado, e o OpenLayers mede o elemento nesse instante.
+    this.observador = new ResizeObserver(() => {
+      this.mapa?.updateSize();
+      this.mapa?.renderSync();
+    });
+    this.observador.observe(container);
+
+    setTimeout(() => {
+      this.mapa?.updateSize();
+      this.mapa?.renderSync();
     });
 
     this.mapa.on('moveend', () => this.aoMoverMapa());

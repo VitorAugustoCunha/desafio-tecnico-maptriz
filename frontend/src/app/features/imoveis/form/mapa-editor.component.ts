@@ -18,13 +18,15 @@ import View from 'ol/View';
 import { Attribution, defaults as controlesPadrao } from 'ol/control';
 import { Draw, Modify, Snap } from 'ol/interaction';
 import { Point, Polygon } from 'ol/geom';
-import { Tile as CamadaDeTiles, Vector as CamadaVetorial } from 'ol/layer';
+import TileLayer from 'ol/layer/Tile';
+import { Vector as CamadaVetorial } from 'ol/layer';
 import { fromLonLat, toLonLat } from 'ol/proj';
-import { OSM, Vector as FonteVetorial } from 'ol/source';
+import { OSM, XYZ, Vector as FonteVetorial } from 'ol/source';
 import { Circle, Fill, Stroke, Style } from 'ol/style';
 import { MapBrowserEvent } from 'ol';
 
 import { PoligonoGeoJson, Posicao } from '../../../core/models/imovel.model';
+import { TipoDeCamadaBase, camadaDeRuas, camadaDeSatelite } from '../../mapa/gis/camadas-base';
 import { areaEmMetrosQuadrados, centroDoAnel, retanguloEmTornoDe } from '../../mapa/gis/projecao';
 
 export type ModoDeDesenho = 'dimensoes' | 'desenho';
@@ -76,11 +78,22 @@ const ZOOM_AO_ESCOLHER = 17;
           Desenhar no mapa
         </button>
 
-        @if (modo() === 'desenho' && temDesenho()) {
-          <button type="button" class="botao botao--pequeno botao--neutro editor__limpar" (click)="limparDesenho()">
-            Apagar desenho
-          </button>
-        }
+        <div class="editor__direita">
+          @if (modo() === 'desenho' && temDesenho()) {
+            <button type="button" class="botao botao--pequeno botao--neutro" (click)="limparDesenho()">
+              Apagar desenho
+            </button>
+          }
+
+          <!-- Sobre imagem aérea dá para contornar o lote; sobre mapa de ruas, não. -->
+          <label class="editor__base">
+            <span class="visualmente-oculto">Camada de fundo</span>
+            <select [value]="camadaBase()" (change)="trocarCamadaBase($event)">
+              <option value="satelite">Satélite</option>
+              <option value="ruas">Ruas</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div #mapa class="editor__mapa" role="application" [attr.aria-label]="rotuloDoMapa()"></div>
@@ -138,8 +151,20 @@ const ZOOM_AO_ESCOLHER = 17;
       font-weight: 600;
     }
 
-    .editor__limpar {
+    .editor__direita {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       margin-left: auto;
+    }
+
+    .editor__base select {
+      padding: 0.3rem 0.5rem;
+      border: 1px solid var(--borda);
+      border-radius: var(--raio);
+      background: var(--superficie);
+      font: inherit;
+      font-size: 0.8125rem;
     }
 
     .editor__mapa {
@@ -175,7 +200,11 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
   private readonly elemento = viewChild.required<ElementRef<HTMLDivElement>>('mapa');
 
   private mapa: Map | null = null;
+  private base: TileLayer<XYZ | OSM> | null = null;
+  private observador: ResizeObserver | null = null;
   private readonly fonte = new FonteVetorial();
+
+  readonly camadaBase = signal<TipoDeCamadaBase>('satelite');
   private desenho: Draw | null = null;
   private modificacao: Modify | null = null;
   private encaixe: Snap | null = null;
@@ -216,8 +245,26 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.observador?.disconnect();
+    this.observador = null;
     this.mapa?.setTarget(undefined);
     this.mapa = null;
+  }
+
+  /** Troca a base entre satélite e ruas, preservando o desenho e o enquadramento. */
+  trocarCamadaBase(evento: Event): void {
+    const escolha = (evento.target as HTMLSelectElement).value as TipoDeCamadaBase;
+
+    if (this.mapa === null || this.base === null || escolha === this.camadaBase()) {
+      return;
+    }
+
+    this.mapa.removeLayer(this.base);
+    this.base = escolha === 'satelite' ? camadaDeSatelite() : camadaDeRuas();
+    // Índice 0: a base tem que ficar embaixo da camada de desenho.
+    this.mapa.getLayers().insertAt(0, this.base);
+
+    this.camadaBase.set(escolha);
   }
 
   rotuloDoMapa(): string {
@@ -259,12 +306,14 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private montar(): void {
+    const container = this.elemento().nativeElement;
+
+    // Satélite por padrão: é a base sobre a qual dá para contornar o lote.
+    this.base = camadaDeSatelite();
+
     this.mapa = new Map({
-      target: this.elemento().nativeElement,
-      layers: [
-        new CamadaDeTiles({ source: new OSM() }),
-        new CamadaVetorial({ source: this.fonte, style: () => this.estilo() }),
-      ],
+      target: container,
+      layers: [this.base, new CamadaVetorial({ source: this.fonte, style: () => this.estilo() })],
       view: new View({
         center: fromLonLat([...this.centroInicial()]),
         zoom: this.temPonto() ? ZOOM_AO_ESCOLHER : ZOOM_PADRAO,
@@ -272,6 +321,21 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
       }),
       controls: controlesPadrao({ attribution: false }).extend([new Attribution({ collapsible: false })]),
     });
+
+    // O container pode ter altura 0 no instante em que o mapa é criado — o CSS
+    // do componente carrega junto com o chunk da rota, e o OpenLayers mede o
+    // elemento na hora. Sem isto o mapa fica em branco com o aviso
+    // "No map visible because the map container's width or height are 0".
+    // O observer também cobre redimensionamento de janela e troca de aba.
+    this.observador = new ResizeObserver(() => {
+      this.mapa?.updateSize();
+      // renderSync desenha na hora, sem esperar requestAnimationFrame. Sem
+      // isto, o primeiro quadro fica pendente quando a aba nao esta
+      // compondo (recem-aberta em segundo plano, por exemplo) e o mapa
+      // aparece em branco ate o usuario interagir.
+      this.mapa?.renderSync();
+    });
+    this.observador.observe(container);
 
     this.mapa.on('click', (evento) => this.aoClicar(evento));
 
@@ -281,6 +345,14 @@ export class MapaEditorComponent implements AfterViewInit, OnDestroy {
     } else {
       this.desenharPreVisualizacao(this.longitude(), this.latitude(), this.larguraM(), this.comprimentoM());
     }
+
+    // O estilo do componente carrega junto com o chunk da rota, entao no
+    // instante da criacao o container pode ainda ter altura 0. Uma medicao
+    // extra no fim da fila de tarefas cobre esse caso.
+    setTimeout(() => {
+      this.mapa?.updateSize();
+      this.mapa?.renderSync();
+    });
   }
 
   private aoClicar(evento: MapBrowserEvent<PointerEvent | KeyboardEvent | WheelEvent>): void {

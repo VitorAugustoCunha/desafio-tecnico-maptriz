@@ -40,8 +40,19 @@
   font-size: 0.875rem;
 }
 
+/*
+  `display: flex` aqui era um bug: aplicado no proprio `<td>`, tirava a celula
+  do layout de tabela. Ela deixava de acompanhar a altura da linha (53 px contra
+  111 px das vizinhas), os botoes descolavam do centro e a borda inferior da
+  linha era desenhada mais acima do que nas outras colunas.
+
+  A celula continua sendo celula; o espacamento entre os botoes sai da margem.
+*/
 .acoes {
-  display: flex;
-  gap: 0.5rem;
   white-space: nowrap;
+  text-align: right;
+
+  .botao + .botao {
+    margin-left: 0.5rem;
+  }
 }

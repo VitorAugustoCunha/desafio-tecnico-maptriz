@@ -38,12 +38,12 @@ import {
   styles: `
     .dialogo {
       border: none;
-      border-radius: 0.75rem;
+      border-radius: var(--raio-grande);
       padding: 1.5rem;
       max-width: min(30rem, calc(100vw - 2rem));
       background: var(--superficie);
       color: var(--texto);
-      box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+      box-shadow: var(--sombra-alta);
     }
 
     .dialogo::backdrop {

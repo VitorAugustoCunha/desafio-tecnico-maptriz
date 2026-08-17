@@ -14,9 +14,25 @@
   }
 }
 
+/*
+  Barra chapada de cor solida e o que mais datava a tela. O degrade curto entre
+  dois tons da mesma primaria e a linha clara no topo dao volume sem virar
+  enfeite, e a sombra separa a barra do conteudo ao rolar.
+*/
 .topo {
-  background: var(--primaria);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: linear-gradient(
+    180deg,
+    var(--primaria-clara) -40%,
+    var(--primaria) 45%,
+    var(--primaria-escura)
+  );
   color: var(--primaria-contraste);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 8%) inset,
+    var(--sombra);
 }
 
 .topo__interno {
@@ -26,58 +42,80 @@
   gap: 1.5rem;
   max-width: 80rem;
   margin: 0 auto;
-  padding: 0.85rem 1.5rem;
+  padding: 0.7rem 1.5rem;
 }
 
 .topo__marca {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   color: inherit;
   text-decoration: none;
-  font-size: 1.125rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 1.0625rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
 }
 
+/* O losango ganha uma placa propria: sem ela era um caractere solto flutuando
+   ao lado do nome. */
 .topo__logo {
-  font-size: 1.25rem;
-  opacity: 0.85;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--raio-pequeno);
+  background: rgb(255 255 255 / 14%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+  font-size: 0.875rem;
 }
 
 .topo__navegacao {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.25rem;
 
   a {
-    padding: 0.4rem 0.8rem;
+    position: relative;
+    padding: 0.4rem 0.85rem;
     border-radius: var(--raio);
     color: inherit;
     text-decoration: none;
     font-size: 0.9375rem;
-    opacity: 0.85;
+    color: rgb(255 255 255 / 78%);
+    transition:
+      background-color var(--transicao),
+      color var(--transicao);
   }
 
   a:hover {
-    background: rgb(255 255 255 / 12%);
-    opacity: 1;
+    background: rgb(255 255 255 / 10%);
+    color: #fff;
   }
 
-  /* Estado atual marcado por cor E por sublinhado: cor sozinha nao serve para
-     quem nao distingue as duas. */
+  /* Estado atual marcado por cor E por forma: cor sozinha nao serve para quem
+     nao distingue as duas. O sublinhado virou um tracinho ancorado na base da
+     aba, que suja menos o texto do que text-decoration. */
   a.ativo {
-    background: rgb(255 255 255 / 18%);
-    opacity: 1;
+    background: rgb(255 255 255 / 16%);
+    color: #fff;
     font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 4px;
+  }
+
+  a.ativo::after {
+    content: '';
+    position: absolute;
+    left: 0.85rem;
+    right: 0.85rem;
+    bottom: 0.15rem;
+    height: 2px;
+    border-radius: 2px;
+    background: currentcolor;
   }
 }
 
 .conteudo {
   max-width: 80rem;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 1.75rem 1.5rem 3rem;
 
   &:focus {
     outline: none;

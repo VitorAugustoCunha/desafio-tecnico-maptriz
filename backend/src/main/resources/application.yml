@@ -82,6 +82,17 @@ webgis:
     tamanho-padrao: ${WEBGIS_PAGINA_TAMANHO_PADRAO:20}
     tamanho-maximo: ${WEBGIS_PAGINA_TAMANHO_MAXIMO:100}
 
+  amostra:
+    # Geracao de massa de teste (POST /api/amostra/imoveis). E ferramenta de
+    # demonstracao e carga, nao operacao de cadastro: desligue em producao e o
+    # endpoint deixa de existir.
+    habilitada: ${WEBGIS_AMOSTRA_HABILITADA:true}
+    quantidade-padrao: ${WEBGIS_AMOSTRA_QUANTIDADE:1000}
+    # Teto por requisicao. A carga roda em uma transacao e segura o advisory
+    # lock de geometria enquanto durar — pedir 500 mil de uma vez travaria as
+    # escritas do cadastro ate terminar.
+    quantidade-maxima: ${WEBGIS_AMOSTRA_QUANTIDADE_MAXIMA:5000}
+
   mapa:
     # Teto de feicoes por consulta de viewport. Acima disso o servidor agrega em
     # vez de devolver feicao por feicao.

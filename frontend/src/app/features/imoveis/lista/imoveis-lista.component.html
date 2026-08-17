@@ -5,6 +5,14 @@
   </div>
 
   <div class="cabecalho__acoes">
+    <button
+      type="button"
+      class="botao botao--neutro"
+      (click)="pedirAmostra()"
+      [disabled]="gerandoAmostra()"
+    >
+      {{ gerandoAmostra() ? 'Gerando…' : 'Gerar ' + lotesDaAmostra + ' imóveis' }}
+    </button>
     <button type="button" class="botao botao--neutro" (click)="atualizar()" [disabled]="carregando()">
       Atualizar
     </button>
@@ -160,4 +168,14 @@
   rotuloConfirmar="Excluir"
   (confirmar)="confirmarExclusao()"
   (cancelar)="cancelarExclusao()"
+/>
+
+<app-confirmacao
+  [aberto]="confirmandoAmostra()"
+  titulo="Gerar imóveis de amostra"
+  [mensagem]="mensagemDaAmostra"
+  [rotuloConfirmar]="'Gerar ' + lotesDaAmostra"
+  tom="primario"
+  (confirmar)="confirmarAmostra()"
+  (cancelar)="cancelarAmostra()"
 />

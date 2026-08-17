@@ -319,6 +319,29 @@ DELETE {{api}}/exportacoes/00000000-0000-0000-0000-000000000000
 # Com o pool saturado, o POST devolve 503 + Retry-After — é o backpressure.
 
 ### ---------------------------------------------------------------------------
+### MASSA DE TESTE
+### ---------------------------------------------------------------------------
+
+### Gerar 1000 lotes que não se sobrepõem → 201
+POST {{api}}/amostra/imoveis?quantidade=1000
+
+# curl -i -s -X POST 'http://localhost:8080/api/amostra/imoveis?quantidade=1000'
+#
+# Grade em EPSG:31982 em Bauru/SP, célula de 40 x 60 m e lotes de 12–24 x
+# 20–40 m: a não sobreposição é garantida por construção, não por sorteio.
+# Repetir empilha um bloco novo acima do anterior. A resposta traz
+# `criados` e `ignorados` — lote sobre imóvel existente é pulado, não derruba
+# a carga.
+
+### Quantidade acima do teto é reduzida ao máximo configurado, não recusada
+POST {{api}}/amostra/imoveis?quantidade=999999
+
+### Quantidade inválida → 400
+POST {{api}}/amostra/imoveis?quantidade=0
+
+# Com WEBGIS_AMOSTRA_HABILITADA=false o bean não é registrado e a rota some (404).
+
+### ---------------------------------------------------------------------------
 ### OPERAÇÃO
 ### ---------------------------------------------------------------------------
 

@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 
+import { AmostraApiService } from '../../../core/api/amostra-api.service';
 import { ImovelApiService } from '../../../core/api/imovel-api.service';
 import { traduzirErro } from '../../../core/api/erro-da-api';
 import { Direcao, ImovelListItem, OrdemImovel } from '../../../core/models/imovel.model';
@@ -17,6 +18,9 @@ import { PaginacaoComponent } from '../../../shared/ui/paginacao.component';
 /** Espera antes de aplicar o filtro digitado, para nao consultar a cada tecla. */
 const ESPERA_DO_FILTRO = 350;
 
+/** Tamanho da carga de demonstracao. Confere com o padrao do servidor. */
+const LOTES_DA_AMOSTRA = 1000;
+
 @Component({
   selector: 'app-imoveis-lista',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -27,6 +31,7 @@ const ESPERA_DO_FILTRO = 350;
 export class ImoveisListaComponent {
   private readonly store = inject(ImoveisStore);
   private readonly api = inject(ImovelApiService);
+  private readonly amostraApi = inject(AmostraApiService);
   private readonly rota = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly notificacoes = inject(NotificacoesService);
@@ -53,6 +58,15 @@ export class ImoveisListaComponent {
   private readonly _paraExcluir = signal<ImovelListItem | null>(null);
   readonly paraExcluir = this._paraExcluir.asReadonly();
   readonly excluindo = signal(false);
+
+  readonly lotesDaAmostra = LOTES_DA_AMOSTRA;
+  readonly confirmandoAmostra = signal(false);
+  readonly gerandoAmostra = signal(false);
+
+  readonly mensagemDaAmostra =
+    `Serão criados ${LOTES_DA_AMOSTRA} imóveis de demonstração em Bauru/SP, ` +
+    'todos com largura e comprimento definidos e polígono em EPSG:31982. ' +
+    'Eles ficam no bairro "Distrito Amostra", que serve para localizá-los e removê-los depois.';
 
   readonly mensagemDeExclusao = computed(() => {
     const imovel = this._paraExcluir();
@@ -157,6 +171,53 @@ export class ImoveisListaComponent {
       error: (erro: unknown) => {
         this.excluindo.set(false);
         this._paraExcluir.set(null);
+        this.notificacoes.erro(traduzirErro(erro).mensagem);
+      },
+    });
+  }
+
+  pedirAmostra(): void {
+    this.confirmandoAmostra.set(true);
+  }
+
+  cancelarAmostra(): void {
+    this.confirmandoAmostra.set(false);
+  }
+
+  /**
+   * Gera a massa de demonstracao.
+   *
+   * <p>O servidor pode devolver menos do que o pedido: lote que cairia sobre um
+   * imovel existente e pulado, em vez de derrubar a carga inteira. A mensagem
+   * diz o numero real, nao o pedido.
+   */
+  confirmarAmostra(): void {
+    if (this.gerandoAmostra()) {
+      return;
+    }
+
+    this.gerandoAmostra.set(true);
+    this.confirmandoAmostra.set(false);
+
+    this.amostraApi.gerarImoveis(LOTES_DA_AMOSTRA).subscribe({
+      next: (amostra) => {
+        this.gerandoAmostra.set(false);
+
+        const detalhe =
+          amostra.ignorados > 0
+            ? ` (${amostra.ignorados} ignorado(s) por conflito de área)`
+            : '';
+
+        this.notificacoes.sucesso(
+          `${amostra.criados} imóveis de amostra criados em ${amostra.municipio}${detalhe}.`,
+        );
+
+        // Criar em massa muda a composicao de todas as paginas.
+        this.store.invalidar();
+        this.store.recarregar();
+      },
+      error: (erro: unknown) => {
+        this.gerandoAmostra.set(false);
         this.notificacoes.erro(traduzirErro(erro).mensagem);
       },
     });

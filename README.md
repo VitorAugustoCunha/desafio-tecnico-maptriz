@@ -228,6 +228,17 @@ IntelliJ), com o `curl` equivalente em cada bloco.
 | `GET` | `/api/exportacoes/{id}` | `200` — status |
 | `GET` | `/api/exportacoes/{id}/arquivo` | `200` — GeoJSON |
 | `DELETE` | `/api/exportacoes/{id}` | `204` — cancela |
+| `POST` | `/api/amostra/imoveis` | `201` — gera massa de teste · `404` se desabilitado |
+
+**Massa de teste.** `POST /api/amostra/imoveis?quantidade=1000` insere uma
+quadra de lotes que **não se sobrepõem por construção** (grade em EPSG:31982,
+célula maior que o maior lote), todos com largura, comprimento e polígono, em
+Bauru/SP — dentro da zona UTM 22S, onde o SRID do projeto não distorce. É o
+botão **"Gerar 1000 imóveis"** da listagem, e existe para exercitar paginação,
+clusterização do mapa e exportação com volume real. Chamadas sucessivas
+empilham blocos novos; lote que cairia sobre um imóvel existente é pulado, e a
+resposta informa quantos. Desligue com `WEBGIS_AMOSTRA_HABILITADA=false` e a
+rota deixa de existir.
 
 **Parâmetros da listagem:** `proprietarioId`, `proprietarioNome`, `municipio`,
 `ativo`, `pagina`, `tamanho` (limitado no servidor), `ordenarPor`

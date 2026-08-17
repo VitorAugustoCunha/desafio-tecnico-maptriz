@@ -29,7 +29,7 @@ import {
         <button type="button" class="botao botao--neutro" (click)="cancelar.emit()">
           {{ rotuloCancelar() }}
         </button>
-        <button type="button" class="botao botao--perigo" (click)="confirmar.emit()">
+        <button type="button" [class]="'botao botao--' + tom()" (click)="confirmar.emit()">
           {{ rotuloConfirmar() }}
         </button>
       </div>
@@ -74,6 +74,15 @@ export class ConfirmacaoComponent {
   readonly mensagem = input('');
   readonly rotuloConfirmar = input('Confirmar');
   readonly rotuloCancelar = input('Cancelar');
+
+  /**
+   * Cor do botao de confirmar.
+   *
+   * <p>Padrao `perigo` porque o primeiro uso do dialogo foi a exclusao. Uma
+   * confirmacao que apenas cria dado nao deve vir vermelha: o vermelho perde o
+   * significado se aparecer em tudo.
+   */
+  readonly tom = input<'perigo' | 'primario'>('perigo');
 
   readonly confirmar = output<void>();
   readonly cancelar = output<void>();
